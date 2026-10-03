@@ -1,0 +1,62 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 10 — STEP 10.4.4 — ADMIN AFFILIATE PRODUCT CONTROLLER
+### ============================================================
+
+
+###
+
+### 1. List Affiliate Products
+
+GET {{baseUrl}}/admin/affiliate-products?per_page=5&page=1
+Accept: application/json
+
+###
+
+### 2. Show Affiliate Product
+
+GET {{baseUrl}}/admin/affiliate-products/1
+Accept: application/json
+
+###
+
+### 3. Create Affiliate Product
+
+POST {{baseUrl}}/admin/affiliate-products
+Accept: application/json
+Content-Type: application/json
+
+{
+  "brand_id": 1,
+  "affiliate_network_id": 1,
+  "category_id": 1,
+  "name": "Cursor AI Pro",
+  "affiliate_url": "https://example.com/cursor-pro",
+  "website_url": "https://cursor.com",
+  "price": 20,
+  "currency": "USD",
+  "rating": 5,
+  "free_trial": true
+}
+
+###
+
+### 4. Update Affiliate Product
+
+PUT {{baseUrl}}/admin/affiliate-products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "ChatGPT Plus Updated",
+  "price": 25,
+  "rating": 5
+}
+
+###
+
+### 5. Delete Affiliate Product
+
+DELETE {{baseUrl}}/admin/affiliate-products/3
+Accept: application/json

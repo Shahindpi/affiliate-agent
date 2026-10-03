@@ -1,0 +1,45 @@
+### Update a Post
+
+PUT http://localhost:8000/api/admin/posts/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Observer Cache Test"
+}
+
+###
+
+### Update a Category
+
+PUT http://localhost:8000/api/admin/categories/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Tools Observer Test"
+}
+
+###
+
+### Update a Tag
+
+PUT http://localhost:8000/api/admin/tags/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "ChatGPT Observer Test"
+}
+
+###
+
+### Update Affiliate Product
+
+PUT http://localhost:8000/api/admin/affiliate-products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "ChatGPT Plus Observer Test"
+}

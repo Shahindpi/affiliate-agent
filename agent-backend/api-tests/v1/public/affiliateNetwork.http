@@ -1,0 +1,17 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### List Affiliate Networks
+GET {{baseUrl}}/public/affiliate-networks
+Accept: application/json
+
+###
+
+### Search Affiliate Networks
+GET {{baseUrl}}/public/affiliate-networks?search=impact
+Accept: application/json
+
+###
+
+### Show Affiliate Network
+GET {{baseUrl}}/public/affiliate-networks/impact-radius
+Accept: application/json

@@ -1,0 +1,3 @@
+OPTIONS http://localhost:8000/api/v1/public/posts
+Origin: http://localhost:3000
+Access-Control-Request-Method: GET

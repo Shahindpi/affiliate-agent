@@ -1,0 +1,75 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 16 — SUBSCRIBER LIST
+### ============================================================
+
+GET {{baseUrl}}/admin/newsletter/subscribers
+Accept: application/json
+
+###
+
+### Search Subscriber
+
+GET {{baseUrl}}/admin/newsletter/subscribers?search=admin
+Accept: application/json
+
+###
+
+### Active Subscribers
+
+GET {{baseUrl}}/admin/newsletter/subscribers?status=true
+Accept: application/json
+
+###
+
+### Inactive Subscribers
+
+GET {{baseUrl}}/admin/newsletter/subscribers?status=false
+Accept: application/json
+
+###
+
+### Subscriber Details
+
+GET {{baseUrl}}/admin/newsletter/subscribers/1
+Accept: application/json
+
+###
+
+### Disable Subscriber
+
+PATCH {{baseUrl}}/admin/newsletter/subscribers/1/status
+Accept: application/json
+Content-Type: application/json
+
+{
+    "status": false
+}
+
+###
+
+### Enable Subscriber
+
+PATCH {{baseUrl}}/admin/newsletter/subscribers/1/status
+Accept: application/json
+Content-Type: application/json
+
+{
+    "status": true
+}
+
+###
+
+### Delete Subscriber
+
+DELETE {{baseUrl}}/admin/newsletter/subscribers/1
+Accept: application/json
+
+
+### ============================================================
+### DAY 16 — SUBSCRIBER STATISTICS
+### ============================================================
+
+GET {{baseUrl}}/admin/newsletter/statistics
+Accept: application/json

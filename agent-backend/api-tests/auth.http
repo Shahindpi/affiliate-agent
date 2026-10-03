@@ -1,0 +1,47 @@
+### CSRF
+@baseUrl = http://localhost:8000/api/v1
+@token = XSRF-TOKEN=eyJpdiI6ImFiczhaUXRvMmI3eHZHakorK0lCcVE9PSIsInZhbHVlIjoiNEpnTVJEalMrUVovOU5qSUJNa3UxK2tsd2grdjMxdFUwdEU3akZTTVliOVJValNOQWhqSWV1VG84WUh0UGtuaWRxMXZPb0xRY05vQnhqNG5EKy9QSkJseUs2cTJwaXkwcnlsNXhGM1hIU2d1ZVJrY05rNVBhM2ZFK1E1Zm5RcTAiLCJtYWMiOiI1MmI3NmQ5MzIwNmVhZTM3MjdhZjNlNTcwYjMxZmVkZGJmMzRjYzkwZThhYTcwOTRiYmMxYTY3YzgxYWM2ZGM1IiwidGFnIjoiIn0%3D
+GET http://localhost:8000/sanctum/csrf-cookie
+Accept: application/json
+
+### LOGIN
+
+POST http://localhost:8000/api/v1/login
+Accept: application/json
+Content-Type: application/json
+
+{
+    "email": "admin@example.com",
+    "password": "Admin@1234567"
+}
+
+### Get Me
+GET http://localhost:8000/api/me
+
+
+### Logout
+POST http://localhost:8000/api/logout
+
+### ==========================================
+### ADMIN DASHBOARD
+### ==========================================
+
+GET http://localhost:8000/api/admin/dashboard
+Accept: application/json
+
+#####
+GET http://localhost:8000/sanctum/csrf-cookie
+Origin: http://localhost:3000
+Accept: application/json
+
+s
+
+### ============================================================
+### AUTHENTICATED USER
+### ============================================================
+
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+Accept: application/json
+
+

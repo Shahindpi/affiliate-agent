@@ -1,0 +1,46 @@
+@baseUrl = http://localhost:8000/api/v1
+
+###
+
+### 1. List Tags
+
+GET {{baseUrl}}/admin/tags?per_page=5&page=1
+Accept: application/json
+
+###
+
+### 2. Show Tag
+
+GET {{baseUrl}}/admin/tags/1
+Accept: application/json
+
+###
+
+### 3. Create Tag
+
+POST {{baseUrl}}/admin/tags
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Laravel 12"
+}
+
+###
+
+### 4. Update Tag
+
+PUT {{baseUrl}}/admin/tags/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Laravel 12 Updated"
+}
+
+###
+
+### 5. Delete Tag
+
+DELETE {{baseUrl}}/admin/tags/10
+Accept: application/json

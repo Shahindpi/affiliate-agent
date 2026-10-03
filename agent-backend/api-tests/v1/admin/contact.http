@@ -1,0 +1,92 @@
+@baseUrl = http://localhost:8000/api/v1
+@token = YOUR_ADMIN_SANCTUM_TOKEN
+
+### ============================================================
+### DAY 17 — CONTACT INBOX
+### ============================================================
+
+### Inbox
+
+GET {{baseUrl}}/admin/contact/messages
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Search by Email
+
+GET {{baseUrl}}/admin/contact/messages?search=admin@example.com
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Search by Subject
+
+GET {{baseUrl}}/admin/contact/messages?search=ChatGPT
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Only New Messages
+
+GET {{baseUrl}}/admin/contact/messages?status=new
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Only Read Messages
+
+GET {{baseUrl}}/admin/contact/messages?status=read
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Message Details (Marks Read)
+
+GET {{baseUrl}}/admin/contact/messages/1
+Authorization: Bearer {{token}}
+Accept: application/json
+
+
+
+
+#### Start from here
+
+### ============================================================
+### DAY 17 — MARK AS READ
+### ============================================================
+
+PATCH {{baseUrl}}/admin/contact/messages/1/read
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### DAY 17 — ARCHIVE MESSAGE
+### ============================================================
+
+PATCH {{baseUrl}}/admin/contact/messages/1/archive
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### DAY 17 — RESTORE MESSAGE
+### ============================================================
+
+PATCH {{baseUrl}}/admin/contact/messages/1/restore
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### DAY 17 — DELETE MESSAGE
+### ============================================================
+
+DELETE {{baseUrl}}/admin/contact/messages/1
+Authorization: Bearer {{token}}
+Accept: application/json

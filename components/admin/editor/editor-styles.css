@@ -1,0 +1,85 @@
+.dewdora-editor .tiptap {
+  min-height: 420px;
+  padding: 1rem;
+  outline: none;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.dewdora-editor h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1.25rem 0;
+}
+
+.dewdora-editor h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1rem 0;
+}
+
+.dewdora-editor h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1rem 0;
+}
+
+.dewdora-editor p {
+  margin: 0.75rem 0;
+}
+
+.dewdora-editor ul,
+.dewdora-editor ol {
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+
+.dewdora-editor li {
+  margin: 0.35rem 0;
+}
+
+.dewdora-editor blockquote {
+  border-left: 4px solid #2563eb;
+  padding-left: 1rem;
+  color: #64748b;
+  margin: 1rem 0;
+  font-style: italic;
+}
+
+.dewdora-editor pre {
+  background: #0f172a;
+  color: white;
+  border-radius: 10px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.dewdora-editor code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.dewdora-editor img {
+  width: 100%;
+  border-radius: 12px;
+  margin: 1.5rem 0;
+  display: block;
+}
+
+.dewdora-editor figure {
+  margin: 1.5rem 0;
+}
+
+.dewdora-editor img.ProseMirror-selectednode {
+  outline: 3px solid #2563eb;
+}
+
+.dewdora-editor a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.dewdora-editor .ProseMirror-focused {
+  outline: none;
+}

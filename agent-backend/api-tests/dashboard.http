@@ -1,0 +1,11 @@
+@baseUrl = http://localhost:8000/api
+
+### Dashboard Overview
+GET {{baseUrl}}/admin/dashboard
+Accept: application/json
+
+###
+
+### Dashboard Analytics
+GET {{baseUrl}}/admin/dashboard/analytics
+Accept: application/json

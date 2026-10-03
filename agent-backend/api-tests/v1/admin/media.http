@@ -1,0 +1,111 @@
+@baseUrl = http://localhost:8000/api/v1
+@token = YOUR_ADMIN_SANCTUM_TOKEN
+
+### ============================================================
+### DAY 14 — MEDIA LIBRARY API
+### ============================================================
+
+GET {{baseUrl}}/admin/media
+Accept: application/json
+
+
+###
+
+### Search Images
+
+GET {{baseUrl}}/admin/media?search=abc
+Accept: application/json
+
+
+###
+
+### Pagination
+
+GET {{baseUrl}}/admin/media?page=1&per_page=10
+Accept: application/json
+
+
+### ============================================================
+### Upload Image
+### ============================================================
+
+POST {{baseUrl}}/admin/media/upload
+Accept: application/json
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary
+
+--WebKitFormBoundary
+Content-Disposition: form-data; name="image"; filename="sample2.jpg"
+Content-Type: image/png
+
+< ./sample2.jpg
+--WebKitFormBoundary--
+
+
+
+### ============================================================
+### Replace Image
+### ============================================================
+
+POST {{baseUrl}}/admin/media/replace
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary
+
+--WebKitFormBoundary
+Content-Disposition: form-data; name="old_path"
+
+uploads/images/sample2.jpg
+--WebKitFormBoundary
+Content-Disposition: form-data; name="image"; filename="sample3.png"
+Content-Type: image/png
+
+< ./sample3.png
+--WebKitFormBoundary--
+
+
+### ============================================================
+### Delete Image (Unused)
+### ============================================================
+
+DELETE {{baseUrl}}/admin/media/delete
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "path": "uploads/images/sample3.png"
+}
+
+###
+
+### Delete Image (In Use)
+### ============================================================
+
+DELETE {{baseUrl}}/admin/media/delete
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "path": "uploads/images/qR8mGMFPPxFjc4E9wUFlkamwyJvyAGgdfcPgGRaa.png"
+}
+
+
+
+
+### ============================================================
+### DAY 15 — DASHBOARD OVERVIEW
+### ============================================================
+
+GET {{baseUrl}}/admin/dashboard/overview
+Authorization: Bearer {{token}}
+Accept: application/json
+
+
+### ============================================================
+### DAY 15 — POPULAR POSTS ANALYTICS
+### ============================================================
+
+GET {{baseUrl}}/admin/dashboard/popular-posts
+Authorization: Bearer {{token}}
+Accept: application/json

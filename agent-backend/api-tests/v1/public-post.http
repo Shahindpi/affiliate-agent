@@ -1,0 +1,13 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### Public Posts
+
+GET {{baseUrl}}/public/posts
+Accept: application/json
+
+###
+
+### Single Public Post
+
+GET {{baseUrl}}/public/posts/laravel-ai-development-guide
+Accept: application/json

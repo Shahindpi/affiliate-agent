@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 13 — GLOBAL SEARCH API
+### ============================================================
+
+### Search AI
+
+GET {{baseUrl}}/public/search?q=AI
+Accept: application/json
+
+###
+
+### Search ChatGPT
+
+GET {{baseUrl}}/public/search?q=ChatGPT
+Accept: application/json
+
+###
+
+### Search Claude
+
+GET {{baseUrl}}/public/search?q=Claude
+Accept: application/json
+
+###
+
+### Search Laravel
+
+GET {{baseUrl}}/public/search?q=Laravel
+Accept: application/json
+
+###
+
+### Empty Search
+
+GET {{baseUrl}}/public/search
+Accept: application/json
+
+
+### Search Suggestions
+GET {{baseUrl}}/public/search/suggestions?q=chat
+Accept: application/json
+
+###
+
+GET {{baseUrl}}/public/search/suggestions?q=lar
+Accept: application/json

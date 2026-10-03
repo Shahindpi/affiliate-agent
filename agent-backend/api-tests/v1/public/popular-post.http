@@ -1,0 +1,23 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 13 — POPULAR POSTS API
+### ============================================================
+
+GET {{baseUrl}}/public/posts/popular
+Accept: application/json
+
+### ============================================================
+### DAY 13 — FEATURED PRODUCTS API
+### ============================================================
+
+GET {{baseUrl}}/public/products/featured
+Accept: application/json
+
+
+### ============================================================
+### DAY 13 — HOMEPAGE API
+### ============================================================
+
+GET {{baseUrl}}/public/homepage
+Accept: application/json

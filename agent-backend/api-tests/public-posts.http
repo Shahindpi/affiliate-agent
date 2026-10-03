@@ -1,0 +1,163 @@
+@baseUrl = http://localhost:8000/api
+@perPage = 10
+
+
+### ============================================================
+### DAY 7 - PUBLIC API TESTS
+### ============================================================
+
+
+### ------------------------------------------------------------
+### 1. Get All Published Posts
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/posts
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 2. Get Published Posts - Pagination
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/posts?page=1&per_page={{perPage}}
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 3. Search Posts
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/posts?search=AI
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 4. Get Single Post - Post Details
+### Replace the slug if necessary
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/posts/best-ai-tools-for-developers
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 5. Get All Categories
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/categories
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 6. Get Category With Published Posts
+### Replace "ai" with your actual category slug
+### ------------------------------------------------------------
+
+### Get Category With Published Posts
+
+GET {{baseUrl}}/public/categories/ai-tools
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 7. Get Category With Pagination
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/categories/ai?page=1&per_page=10
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 8. Get All Tags
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/tags
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 9. Get Tag With Published Posts
+### Replace "ai" with your actual tag slug
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/tags/artificial-intelligence-2
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 10. Get Tag With Pagination
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/tags/ai?page=1&per_page=10
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 11. Get All Affiliate Products
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/products
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 12. Get Affiliate Products - Pagination
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/products?page=1&per_page=10
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 13. Search Affiliate Products
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/products?search=AI
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 14. Filter Affiliate Products By Category
+### Replace "ai-tools" with your actual category slug
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/products?category=ai-tools
+Accept: application/json
+
+
+### ------------------------------------------------------------
+### 15. Get Single Affiliate Product
+### Replace slug if necessary
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/products/example-ai-pro
+Accept: application/json
+
+
+### Get Published Post
+GET http://localhost:8000/api/public/posts/best-ai-tools-for-developers
+Accept: application/json
+
+
+### Public Post
+GET http://localhost:8000/api/public/posts
+Accept: application/json
+
+### Public Category
+GET http://localhost:8000/api/public/categories
+Accept: application/json
+
+### Public Tags
+GET http://localhost:8000/api/public/tags
+Accept: application/json
+
+### Public Product
+GET http://localhost:8000/api/public/products
+Accept: application/json
+
+###
+###Analytics Cache-Control: 
+###
+GET http://localhost:8000/api/admin/dashboard/analytics
+Accept: application/json
+

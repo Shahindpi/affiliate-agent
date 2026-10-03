@@ -1,0 +1,184 @@
+### ============================================================
+### DAY 9 — STEP 2.1 — POST CACHE INVALIDATION
+### ============================================================
+
+### Update Post
+
+PUT http://localhost:8000/api/admin/posts/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Best AI Tools for Developers Updated"
+}
+
+###
+
+### Verify Public Post Cache Was Cleared
+
+GET http://localhost:8000/api/public/posts/best-ai-tools-for-developers-updated
+Accept: application/json
+
+###
+
+### Delete Post
+
+DELETE http://localhost:8000/api/admin/posts/1
+Accept: application/json
+
+
+###
+
+### ============================================================
+### 3. Update Category (No Bearer Token)
+### ============================================================
+
+PUT http://localhost:8000/api/admin/categories/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Tools Updated"
+}
+
+###
+
+### ============================================================
+### 4. Verify Public Category Cache Cleared
+### ============================================================
+
+GET http://localhost:8000/api/public/categories/ai-tools-updated
+Accept: application/json
+
+###
+
+### ============================================================
+### 5. Verify Categories List Cache Cleared
+### ============================================================
+
+GET http://localhost:8000/api/public/categories
+Accept: application/json
+
+###
+
+### ============================================================
+### 6. Create New Category
+### ============================================================
+
+POST http://localhost:8000/api/admin/categories
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Automation"
+}
+
+###
+
+### ============================================================
+### 7. Delete Category (Use an Empty Category ID)
+### ============================================================
+
+DELETE http://localhost:8000/api/admin/categories/3
+Accept: application/json
+
+@baseUrl = http://localhost:8000
+
+### ============================================================
+### DAY 9 — STEP 2.3 — TAG CACHE INVALIDATION
+### ============================================================
+
+
+###
+
+### Create Tag
+
+POST {{baseUrl}}/api/admin/tags
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Agents"
+}
+
+###
+
+### Update Tag
+
+PUT {{baseUrl}}/api/admin/tags/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Tools Updated"
+}
+
+###
+
+### Verify Public Tag Cache Cleared
+
+GET {{baseUrl}}/api/public/tags/ai-tools-updated
+Accept: application/json
+
+###
+
+### Verify Tags List Cache Cleared
+
+GET {{baseUrl}}/api/public/tags
+Accept: application/json
+
+###
+
+### Delete Tag
+
+DELETE {{baseUrl}}/api/admin/tags/3
+Accept: application/json
+
+
+###
+
+### Create Affiliate Product
+
+POST {{baseUrl}}/api/admin/affiliate-products
+Accept: application/json
+Content-Type: application/json
+
+{
+  "category_id": 1,
+  "name": "Claude Pro",
+  "affiliate_url": "https://example.com/claude-pro"
+}
+
+###
+
+### Update Affiliate Product
+
+PUT {{baseUrl}}/api/admin/affiliate-products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "ChatGPT Plus Updated",
+  "featured": true
+}
+
+###
+
+### Verify Public Product Cache Cleared
+
+GET {{baseUrl}}/api/public/products/chatgpt-plus-updated
+Accept: application/json
+
+###
+
+### Verify Product List Cache Cleared
+
+GET {{baseUrl}}/api/public/products
+Accept: application/json
+
+###
+
+### Delete Affiliate Product
+
+DELETE {{baseUrl}}/api/admin/affiliate-products/2
+Accept: application/json

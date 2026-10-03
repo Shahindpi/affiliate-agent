@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8000/api/v1
+
+###
+
+### 1. List Categories (Paginated Resource)
+
+GET {{baseUrl}}/admin/categories?per_page=5&page=1
+Accept: application/json
+
+###
+
+### 2. Show Category (Resource)
+
+GET {{baseUrl}}/admin/categories/1
+Accept: application/json
+
+###
+
+### 3. Create Category
+
+POST {{baseUrl}}/admin/categories
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Developer Productivity",
+  "description": "Tools and workflows to improve developer productivity."
+}
+
+###
+
+### 4. Update Category
+
+PUT {{baseUrl}}/admin/categories/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "AI Tools & Productivity",
+  "description": "Updated description for AI tools and productivity."
+}
+
+###
+
+### 5. Delete Category (Replace ID with an unused category)
+
+DELETE {{baseUrl}}/admin/categories/8
+Accept: application/json

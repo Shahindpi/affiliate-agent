@@ -1,0 +1,76 @@
+@baseUrl = http://localhost:8000/api/v1
+@token = YOUR_ADMIN_TOKEN
+
+### ============================================================
+### GET PROFILE
+### ============================================================
+
+GET {{baseUrl}}/admin/profile
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### ============================================================
+### UPDATE PROFILE
+### ============================================================
+
+PUT {{baseUrl}}/admin/profile
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Admin User",
+  "username": "admin",
+  "phone": "+8801712345678"
+}
+
+### ============================================================
+### CHANGE PASSWORD
+### ============================================================
+
+PUT {{baseUrl}}/admin/profile/password
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "current_password": "Admin@123456",
+    "password": "Admin@1234567",
+    "password_confirmation": "Admin@1234567"
+}
+
+###
+
+### Wrong Current Password
+
+PUT {{baseUrl}}/admin/profile/password
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: application/json
+
+{
+    "current_password": "wrong-password",
+    "password": "NewSecurePassword123",
+    "password_confirmation": "NewSecurePassword123"
+}
+
+
+
+### ============================================================
+### UPLOAD AVATAR
+### ============================================================
+
+POST {{baseUrl}}/admin/profile/avatar
+Authorization: Bearer {{token}}
+Accept: application/json
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary
+
+--WebKitFormBoundary
+Content-Disposition: form-data; name="avatar"; filename="avatar.png"
+Content-Type: image/png
+
+< ./avatar.png
+
+--WebKitFormBoundary--

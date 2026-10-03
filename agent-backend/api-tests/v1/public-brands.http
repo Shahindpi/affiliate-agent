@@ -1,0 +1,49 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 11 — PUBLIC BRAND CONTROLLER
+### ============================================================
+
+### ------------------------------------------------------------
+### 1. List Brands
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/brands
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 2. List Brands (Pagination)
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/brands?per_page=2&page=1
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 3. Search Brands
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/brands?search=open
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 4. Show Brand by Slug
+### Replace `openai-inc` with your actual brand slug if different.
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/brands/openai-inc
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 5. Brand Not Found (404)
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/public/brands/brand-does-not-exist
+Accept: application/json

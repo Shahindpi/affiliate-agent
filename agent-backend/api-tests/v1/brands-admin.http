@@ -1,0 +1,54 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 11 — ADMIN BRANDS
+### ============================================================
+
+
+###
+
+### 1. List Brands
+
+GET {{baseUrl}}/admin/brands?per_page=5&page=1
+Accept: application/json
+
+###
+
+### 2. Show Brand
+
+GET {{baseUrl}}/admin/brands/1
+Accept: application/json
+
+###
+
+### 3. Create Brand
+
+POST {{baseUrl}}/admin/brands
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "OpenAI 2",
+  "website": "https://openai.com",
+  "description": "Artificial Intelligence research company2."
+}
+
+###
+
+### 4. Update Brand
+
+PUT {{baseUrl}}/admin/brands/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "OpenAI Inc.",
+  "website": "https://openai.com"
+}
+
+###
+
+### 5. Delete Brand (Use an unused ID)
+
+DELETE {{baseUrl}}/admin/brands/10
+Accept: application/json

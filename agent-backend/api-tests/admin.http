@@ -1,0 +1,48 @@
+### ==========================================
+### ADMIN - POSTS
+### ==========================================
+
+### List Posts
+
+GET http://localhost:8000/api/admin/posts
+Accept: application/json
+
+### Create Post
+
+POST http://localhost:8000/api/admin/posts
+Accept: application/json
+Content-Type: application/json
+
+{
+    "title": "Best AI Tools for Developers",
+    "slug": "best-ai-tools-for-developers-2",
+    "category_id": 1,
+    "excerpt": "A practical guide to the best AI tools for developers.",
+    "content": "This is our first affiliate article.",
+    "post_type": "article",
+    "status": "draft",
+    "reading_time": 5,
+    "allow_comments": false
+}
+
+### Get Post
+
+GET http://localhost:8000/api/admin/posts/2
+Accept: application/json
+
+### Update Post
+
+PUT http://localhost:8000/api/admin/posts/2
+Accept: application/json
+Content-Type: application/json
+
+{
+    "title": "Best AI Tools for Developers in 2026",
+    "status": "published",
+    "reading_time": 7
+}
+
+### Delete Post
+
+DELETE http://localhost:8000/api/admin/posts/2
+Accept: application/json

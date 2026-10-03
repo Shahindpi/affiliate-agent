@@ -1,0 +1,62 @@
+### ==========================================
+### ADMIN TAGS
+### ==========================================
+
+### List
+
+GET http://localhost:8000/api/admin/tags
+Accept: application/json
+
+
+### Create
+
+POST http://localhost:8000/api/admin/tags
+Accept: application/json
+Content-Type: application/json
+
+{
+    "name": "Artificial Intelligence 2",
+    "slug": "artificial-intelligence-2"
+}
+
+
+
+### Assign Tags To Post
+
+PUT http://localhost:8000/api/admin/posts/1/tags
+Accept: application/json
+Content-Type: application/json
+
+{
+    "tag_ids": [
+        1,
+        2
+    ]
+}
+
+
+### ==========================================
+### PUBLIC TAGS
+### ==========================================
+
+### List tags
+
+GET http://localhost:8000/api/public/tags
+Accept: application/json
+
+
+### ==========================================
+### TAG DETAILS
+### ==========================================
+
+### Replace ai with your actual slug
+
+GET http://localhost:8000/api/public/tags/artificial-intelligence
+Accept: application/json
+
+### ==========================================
+### TAG DETAILS
+### ==========================================
+
+GET http://localhost:8000/api/public/tags/ai
+Accept: application/json

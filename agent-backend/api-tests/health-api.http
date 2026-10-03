@@ -1,0 +1,28 @@
+### ============================================================
+### DAY 9 — STEP 5 — ADMIN HEALTH API
+### ============================================================
+
+### Get Sanctum CSRF Cookie
+
+GET http://localhost:8000/sanctum/csrf-cookie
+Accept: application/json
+
+###
+
+### Login
+
+POST http://localhost:8000/api/login
+Accept: application/json
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin@123456"
+}
+
+###
+
+### Admin Health Check
+
+GET http://localhost:8000/api/admin/dashboard/health
+Accept: application/json

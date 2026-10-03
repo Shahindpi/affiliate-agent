@@ -1,0 +1,47 @@
+### ==========================================
+### POST DETAILS
+### ==========================================
+
+GET http://localhost:8000/api/public/posts/best-ai-tools-for-developers
+Accept: application/json
+
+
+### ==========================================
+### GET POStS
+### ==========================================
+
+GET http://localhost:8000/api/public/posts/best-ai-tools-for-developers
+Accept: application/json
+
+### ==========================================
+### GET POStS
+### ==========================================
+
+GET http://localhost:8000/api/public/posts
+Accept: application/json
+
+
+### Posts - 5 per page
+
+GET http://localhost:8000/api/public/posts?per_page=5
+Accept: application/json
+
+
+### Posts - page 2
+
+GET http://localhost:8000/api/public/posts?per_page=5&page=2
+Accept: application/json
+
+
+###Update Post
+
+PUT http://localhost:8000/api/admin/posts/1
+Content-Type: application/json
+Accept: application/json
+
+{
+    "title": "Updated AI Tools for Developers",
+    "content": "Updated post content.",
+    "status": "published"
+}
+

@@ -1,0 +1,22 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 18 — GET COMMENTS
+### ============================================================
+
+GET {{baseUrl}}/public/posts/best-ai-tools-for-developers-resource-test/comments
+Accept: application/json
+
+###
+
+### Pagination Test
+
+GET {{baseUrl}}/public/posts/best-ai-tools-for-developers-resource-test/comments?per_page=5&page=1
+Accept: application/json
+
+###
+
+### Non Existing Post
+
+GET {{baseUrl}}/public/posts/invalid-post/comments
+Accept: application/json

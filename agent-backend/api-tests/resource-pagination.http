@@ -1,0 +1,43 @@
+@baseUrl = http://localhost:8000/api
+
+### ------------------------------------------------------------
+### Posts — Search
+### ------------------------------------------------------------
+GET {{baseUrl}}/public/posts?search=AI
+Accept: application/json
+
+###
+
+### Posts — Category Filter
+GET {{baseUrl}}/public/posts?category=ai-tools
+Accept: application/json
+
+###
+
+### Posts — Tag Filter
+GET {{baseUrl}}/public/posts?tag=chatgpt
+Accept: application/json
+
+###
+
+### Posts — Sort Oldest
+GET {{baseUrl}}/public/posts?sort=oldest
+Accept: application/json
+
+###
+
+### Posts — Sort Popular
+GET {{baseUrl}}/public/posts?sort=popular
+Accept: application/json
+
+###
+
+### Tags — Search
+GET {{baseUrl}}/public/tags?search=AI
+Accept: application/json
+
+###
+
+### Tags — Pagination
+GET {{baseUrl}}/public/tags?per_page=2&page=1
+Accept: application/json

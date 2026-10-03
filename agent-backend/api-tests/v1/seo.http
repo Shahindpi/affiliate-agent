@@ -1,0 +1,55 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 12 — WEB SEO ENDPOINTS
+### ============================================================
+
+### Sitemap XML
+
+GET {{baseUrl}}/sitemap.xml
+
+###
+
+### Robots.txt
+
+GET {{baseUrl}}/robots.txt
+
+### ============================================================
+### RSS Feed
+### ============================================================
+
+GET {{baseUrl}}/feed.xml
+Accept: application/rss+xml
+
+
+### ============================================================
+### Verify SEO Metadata
+### ============================================================
+
+GET {{baseUrl}}/public/posts/laravel-ai-development-guide
+Accept: application/json
+
+
+#### test
+GET http://localhost:8000/api/v1/public/posts/best-ai-tools-for-developers-resource-test
+Accept: application/json
+
+
+### ============================================================
+### Verify JSON-LD SEO Metadata
+### ============================================================
+
+GET http://localhost:8000/api/v1/public/posts/best-ai-tools-for-developers-resource-test
+Accept: application/json
+
+
+### ============================================================
+### Verify Product JSON-LD
+### ============================================================
+
+GET http://localhost:8000/api/v1/public/products/chatgpt-plus-updated
+Accept: application/json
+
+### Test search
+GET http://localhost:8000/api/v1/public/search?q=AI
+Accept: application/json

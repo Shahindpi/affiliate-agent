@@ -1,0 +1,62 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 16 — NEWSLETTER SUBSCRIBE
+### ============================================================
+
+POST {{baseUrl}}/public/newsletter/subscribe
+Accept: application/json
+Content-Type: application/json
+
+{
+    "name": "admin",
+    "email": "admin@example.com"
+}
+
+###
+
+### Subscribe Same Email Again
+
+POST {{baseUrl}}/public/newsletter/subscribe
+Accept: application/json
+Content-Type: application/json
+
+{
+    "email": "admin-test@example.com"
+}
+
+### ============================================================
+### DAY 16 — NEWSLETTER UNSUBSCRIBE
+### ============================================================
+
+POST {{baseUrl}}/public/newsletter/unsubscribe
+Accept: application/json
+Content-Type: application/json
+
+{
+    "email": "admin@example.com"
+}
+
+###
+
+### Unsubscribe Again
+
+POST {{baseUrl}}/public/newsletter/unsubscribe
+Accept: application/json
+Content-Type: application/json
+
+{
+    "email": "admin-test@example.com"
+}
+
+###
+
+### Subscriber Not Found
+
+POST {{baseUrl}}/public/newsletter/unsubscribe
+Accept: application/json
+Content-Type: application/json
+
+{
+    "email": "admin-test@example.com"
+}

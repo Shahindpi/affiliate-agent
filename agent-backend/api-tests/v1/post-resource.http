@@ -1,0 +1,22 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### Admin Posts List
+GET {{baseUrl}}/admin/posts
+Accept: application/json
+
+###
+
+### Admin Single Post
+GET {{baseUrl}}/admin/posts/1
+Accept: application/json
+
+###
+
+### Admin Update Post
+PUT {{baseUrl}}/admin/posts/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Best AI Tools for Developers - Resource Test"
+}

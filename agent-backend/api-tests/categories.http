@@ -1,0 +1,64 @@
+### ==========================================
+### ADMIN CATEGORIES
+### ==========================================
+
+### List
+
+GET http://localhost:8000/api/admin/categories
+Accept: application/json
+
+
+### Create
+
+POST http://localhost:8000/api/admin/categories
+Accept: application/json
+Content-Type: application/json
+
+{
+    "name": "AI Tools",
+    "slug": "ai-tools-2",
+    "description": "Artificial intelligence tools and software."
+}
+
+
+### ==========================================
+### PUBLIC CATEGORIES
+### ==========================================
+
+### List categories
+
+GET http://localhost:8000/api/public/categories
+Accept: application/json
+
+
+### ==========================================
+### CATEGORY DETAILS
+### ==========================================
+
+### Replace ai-tools with your actual slug
+
+GET http://localhost:8000/api/public/categories/ai-tools
+Accept: application/json
+
+
+
+### ==========================================
+### Paginations
+### ==========================================
+
+GET http://localhost:8000/api/public/categories/ai-tools?per_page=5
+Accept: application/json
+
+### ==========================================
+### Categories
+### ==========================================
+
+GET http://localhost:8000/api/public/categories
+Accept: application/json
+
+### ==========================================
+### Categories
+### ========================================== 
+
+GET http://localhost:8000/api/public/categories/ai-tools
+Accept: application/json

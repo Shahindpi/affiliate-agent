@@ -1,0 +1,50 @@
+@baseUrl = http://localhost:8000/api/v1
+
+
+###
+
+### 1. List Affiliate Networks
+
+GET {{baseUrl}}/admin/affiliate-networks?per_page=5&page=1
+Accept: application/json
+
+###
+
+### 2. Show Affiliate Network
+
+GET {{baseUrl}}/admin/affiliate-networks/1
+Accept: application/json
+
+###
+
+### 3. Create Affiliate Network
+
+POST {{baseUrl}}/admin/affiliate-networks
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Impact",
+  "website": "https://impact.com",
+  "description": "Affiliate marketing platform."
+}
+
+###
+
+### 4. Update Affiliate Network
+
+PUT {{baseUrl}}/admin/affiliate-networks/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "name": "Impact Radius",
+  "website": "https://impact.com"
+}
+
+###
+
+### 5. Delete Affiliate Network
+
+DELETE {{baseUrl}}/admin/affiliate-networks/10
+Accept: application/json

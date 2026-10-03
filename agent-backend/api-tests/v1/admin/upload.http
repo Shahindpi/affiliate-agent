@@ -1,0 +1,78 @@
+@baseUrl = http://localhost:8000/api/v1
+
+###
+
+### ------------------------------------------------------------
+### 3. Upload Image
+### Place chatgpt-logo.png beside this .http file.
+### ------------------------------------------------------------
+
+POST {{baseUrl}}/admin/upload/image
+Accept: application/json
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="image"; filename="chatgpt-logo3.png"
+Content-Type: image/png
+
+< ./chatgpt-logo3.png
+--boundary--
+
+
+### ============================================================
+### Update Brand Logo
+### Replace the path with the value returned by Upload API.
+### ============================================================
+
+PUT {{baseUrl}}/admin/brands/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "logo": "uploads/images/abc123xyz.png"
+}
+
+### ============================================================
+### Update Product Featured Image
+### Replace the path with the value returned by Upload API.
+### ============================================================
+
+PUT {{baseUrl}}/admin/affiliate-products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "featured_image": "uploads/images/abc123xyz.png"
+}
+
+
+### ============================================================
+### Verify Brand Logo URL
+### ============================================================
+
+GET {{baseUrl}}/public/brands/openai-inc
+Accept: application/json
+
+
+### ============================================================
+### Verify Featured Image URL
+### ============================================================
+
+GET {{baseUrl}}/public/products/chatgpt-plus-updated
+Accept: application/json
+
+
+### ============================================================
+### Upload Image
+### ============================================================
+
+POST {{baseUrl}}/admin/media/upload
+Accept: application/json
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary
+
+--WebKitFormBoundary
+Content-Disposition: form-data; name="image"; filename="sample.jpg"
+Content-Type: image/jpg
+
+< ./sample.jpg
+--WebKitFormBoundary--

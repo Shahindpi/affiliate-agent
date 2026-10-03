@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### Get CSRF Cookie
+
+GET http://localhost:8000/sanctum/csrf-cookie
+Accept: application/json
+
+###
+
+### Login
+
+POST {{baseUrl}}/login
+Accept: application/json
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Admin@1234567"
+}
+
+###
+
+### Public Posts
+
+GET {{baseUrl}}/public/posts
+Accept: application/json
+
+###
+
+### Admin Dashboard
+
+GET {{baseUrl}}/admin/dashboard
+Accept: application/json
+### Sit map
+GET http://localhost:8000/sitemap.xml

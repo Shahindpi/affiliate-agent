@@ -1,0 +1,83 @@
+### ==========================================
+### ADMIN AFFILIATE PRODUCTS
+### ==========================================
+
+### List Products
+
+GET http://localhost:8000/api/admin/affiliate-products
+Accept: application/json
+
+
+### Get Product
+
+GET http://localhost:8000/api/admin/affiliate-products/1
+Accept: application/json
+
+
+### Create Product
+
+POST http://localhost:8000/api/admin/affiliate-products
+Accept: application/json
+Content-Type: application/json
+
+{
+    "brand_id": 1,
+    "affiliate_network_id": 1,
+    "category_id": 1,
+    "name": "Developer AI Assistant",
+    "slug": "developer-ai-assistant",
+    "short_description": "An AI assistant for software developers.",
+    "description": "A detailed description of the developer AI assistant.",
+    "website_url": "https://example.com",
+    "affiliate_url": "https://example.com/?ref=YOUR_AFFILIATE_ID",
+    "price": 19.99,
+    "currency": "USD",
+    "commission_rate": 30,
+    "free_trial": true,
+    "rating": 4.5,
+    "pros": [
+        "Easy to use",
+        "Fast",
+        "Developer focused"
+    ],
+    "cons": [
+        "Limited free plan"
+    ],
+    "featured": false,
+    "status": true
+}
+
+
+### Update Product
+
+PUT http://localhost:8000/api/admin/affiliate-products/2
+Accept: application/json
+Content-Type: application/json
+
+{
+    "rating": 4.8,
+    "featured": true
+}
+
+
+### Attach Affiliate Product To Post
+
+PUT http://localhost:8000/api/admin/posts/1/affiliate-products
+Accept: application/json
+Content-Type: application/json
+
+{
+    "products": [
+        {
+            "affiliate_product_id": 1,
+            "sort_order": 1,
+            "is_primary": true
+        }
+    ]
+}
+
+
+### Get Complete Post
+
+GET http://localhost:8000/api/admin/posts/1
+Accept: application/json

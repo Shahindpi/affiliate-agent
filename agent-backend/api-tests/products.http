@@ -1,0 +1,52 @@
+### ==========================================
+### PUBLIC AFFILIATE PRODUCTS
+### ==========================================
+
+### List products
+
+GET http://localhost:8000/api/public/products
+Accept: application/json
+
+
+### ==========================================
+### PRODUCT DETAILS
+### ==========================================
+
+GET http://localhost:8000/api/public/products/example-ai-pro
+Accept: application/json
+
+
+### Search products
+
+GET http://localhost:8000/api/public/products?search=AI
+Accept: application/json
+
+### Search products
+GET http://localhost:8000/api/public/products?search=productivity
+Accept: application/json
+
+
+
+### Products by category
+
+GET http://localhost:8000/api/public/products?category=ai-tools
+Accept: application/json
+
+
+
+### Product pagination
+
+GET http://localhost:8000/api/public/products?page=1&per_page=5
+Accept: application/json
+
+### Product Details
+
+GET http://localhost:8000/api/public/products/example-ai-pro
+Accept: application/json
+
+### ==========================================
+### Public Products
+### ==========================================
+
+GET http://localhost:8000/api/public/products
+Accept: application/json

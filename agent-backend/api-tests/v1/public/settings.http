@@ -1,0 +1,8 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### PUBLIC SITE SETTINGS
+### ============================================================
+
+GET {{baseUrl}}/public/settings
+Accept: application/json

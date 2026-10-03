@@ -1,0 +1,57 @@
+### ==========================================
+### POST SEO
+### ==========================================
+
+### Update Post SEO
+
+PUT http://localhost:8000/api/admin/posts/1/seo
+Accept: application/json
+Content-Type: application/json
+
+{
+    "meta_title": "Best AI Tools for Developers in 2026",
+    "meta_description": "Discover the best AI tools for developers, including coding assistants, productivity tools and automation platforms.",
+    "canonical_url": "https://dewdora.com/posts/best-ai-tools-for-developers",
+    "og_title": "Best AI Tools for Developers",
+    "og_description": "Our developer-focused guide to the best AI tools.",
+    "og_image": "https://dewdora.com/images/ai-tools.jpg",
+    "twitter_title": "Best AI Tools for Developers",
+    "twitter_description": "Discover useful AI tools for developers.",
+    "twitter_image": "https://dewdora.com/images/ai-tools.jpg",
+    "robots": "index,follow",
+    "schema_data": {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "Best AI Tools for Developers in 2026"
+    }
+}
+
+
+### ==========================================
+### AFFILIATE PRODUCT SEO
+### ==========================================
+
+### Update Affiliate Product SEO
+
+PUT http://localhost:8000/api/admin/affiliate-products/1/seo
+Accept: application/json
+Content-Type: application/json
+
+{
+    "meta_title": "Example AI Pro Review - Features, Pricing & Alternatives",
+    "meta_description": "Read our detailed Example AI Pro review covering features, pricing, pros, cons and alternatives.",
+    "canonical_url": "https://dewdora.com/products/example-ai-pro",
+    "og_title": "Example AI Pro Review",
+    "og_description": "Our detailed review of Example AI Pro.",
+    "og_image": "https://dewdora.com/images/example-ai-pro.jpg",
+    "twitter_title": "Example AI Pro Review",
+    "twitter_description": "Features, pricing, pros, cons and alternatives.",
+    "twitter_image": "https://dewdora.com/images/example-ai-pro.jpg",
+    "robots": "index,follow",
+    "schema_data": {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Example AI Pro",
+        "applicationCategory": "BusinessApplication"
+    }
+}

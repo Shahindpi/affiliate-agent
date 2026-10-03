@@ -1,0 +1,39 @@
+@baseUrl = http://localhost:8000
+
+###
+GET http://localhost:8000/api/public/posts/this-post-does-not-exist
+Accept: application/json
+###
+
+### ------------------------------------------------------------
+### 5. Authentication Error (401)
+### No Authorization Header
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/api/me
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 6. Forbidden Error (403)
+### Use a NON-ADMIN token here if available.
+### ------------------------------------------------------------
+
+
+### ------------------------------------------------------------
+### 7. Model Not Found (404)
+### Post slug does not exist.
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/api/public/posts/this-post-does-not-exist
+Accept: application/json
+
+###
+
+### ------------------------------------------------------------
+### 8. Unknown API Route (404)
+### ------------------------------------------------------------
+
+GET {{baseUrl}}/api/public/unknown-endpoint
+Accept: application/json

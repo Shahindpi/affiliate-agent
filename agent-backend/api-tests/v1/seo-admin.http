@@ -1,0 +1,13 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### Update Post SEO
+PUT {{baseUrl}}/admin/posts/1/seo
+
+### Delete Post SEO
+DELETE {{baseUrl}}/admin/posts/1/seo
+
+### Update Product SEO
+PUT {{baseUrl}}/admin/affiliate-products/1/seo
+
+### Delete Product SEO
+DELETE {{baseUrl}}/admin/affiliate-products/1/seo

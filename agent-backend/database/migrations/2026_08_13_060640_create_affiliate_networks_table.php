@@ -1,0 +1,38 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('affiliate_networks', function (Blueprint $table) {
+            $table->id();
+
+            $table->string('name', 150);
+
+            $table->string('slug', 180);
+
+            $table->string('website')->nullable();
+
+            $table->text('description')->nullable();
+
+            $table->boolean('status')->default(true);
+
+            $table->timestamps();
+
+            $table->softDeletes();
+
+            $table->unique('slug');
+
+            $table->index('status');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('affiliate_networks');
+    }
+};

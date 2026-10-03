@@ -1,0 +1,57 @@
+
+
+### Update Post SEO
+
+PUT http://localhost:8000/api/admin/posts/1/seo
+Accept: application/json
+Content-Type: application/json
+
+{
+  "meta_title": "Best AI Tools for Developers (Updated SEO)",
+  "meta_description": "Updated SEO description for testing cache invalidation.",
+  "canonical_url": "https://dewdora.com/posts/best-ai-tools-for-developers",
+  "robots": "index,follow"
+}
+
+###
+
+### Verify Public Post
+
+GET http://localhost:8000/api/public/posts/best-ai-tools-for-developers
+Accept: application/json
+
+###
+
+### Update Affiliate Product SEO
+
+PUT http://localhost:8000/api/admin/affiliate-products/1/seo
+Accept: application/json
+Content-Type: application/json
+
+{
+  "meta_title": "ChatGPT Plus Review (Updated SEO)",
+  "meta_description": "Updated SEO description for ChatGPT Plus.",
+  "canonical_url": "https://dewdora.com/products/chatgpt-plus",
+  "robots": "index,follow"
+}
+
+###
+
+### Verify Public Product
+
+GET http://localhost:8000/api/public/products/chatgpt-plus
+Accept: application/json
+
+###
+
+### Delete Post SEO
+
+DELETE http://localhost:8000/api/admin/posts/1/seo
+Accept: application/json
+
+###
+
+### Delete Affiliate Product SEO
+
+DELETE http://localhost:8000/api/admin/affiliate-products/1/seo
+Accept: application/json

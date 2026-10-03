@@ -1,0 +1,31 @@
+@baseUrl = http://localhost:8000/api/v1
+
+### ============================================================
+### DAY 17 — CONTACT FORM
+### ============================================================
+
+POST {{baseUrl}}/public/contact
+Accept: application/json
+Content-Type: application/json
+
+{
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "subject": "Need help with ChatGPT Plus",
+    "message": "I want to know whether ChatGPT Plus is worth buying for Laravel development."
+}
+
+###
+
+### Validation Test
+
+POST {{baseUrl}}/public/contact
+Accept: application/json
+Content-Type: application/json
+
+{
+    "name": "",
+    "email": "invalid-email",
+    "subject": "",
+    "message": "short"
+}

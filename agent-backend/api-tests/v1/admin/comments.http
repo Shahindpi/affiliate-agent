@@ -1,0 +1,87 @@
+@baseUrl = http://localhost:8000/api/v1
+@token = YOUR_ADMIN_TOKEN
+
+### ============================================================
+### DAY 18 — COMMENT MODERATION
+### ============================================================
+
+### List Comments
+
+GET {{baseUrl}}/admin/comments
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Pending Comments
+
+GET {{baseUrl}}/admin/comments?status=pending
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Approved Comments
+
+GET {{baseUrl}}/admin/comments?status=approved
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Search Comments
+
+GET {{baseUrl}}/admin/comments?search=John
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### View Comment
+
+GET {{baseUrl}}/admin/comments/1
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Approve Comment
+
+PATCH {{baseUrl}}/admin/comments/1/approve
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Mark Spam
+
+PATCH {{baseUrl}}/admin/comments/1/spam
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Reject Comment
+
+PATCH {{baseUrl}}/admin/comments/1/reject
+Authorization: Bearer {{token}}
+Accept: application/json
+
+###
+
+### Delete Comment
+
+DELETE {{baseUrl}}/admin/comments/1
+Authorization: Bearer {{token}}
+Accept: application/json
+
+
+##### Test here
+
+### ============================================================
+### DAY 18 — COMMENT STATISTICS
+### ============================================================
+
+GET {{baseUrl}}/admin/comments/statistics
+Authorization: Bearer {{token}}
+Accept: application/json
