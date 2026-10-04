@@ -37,7 +37,7 @@ class ReviewService
     public function invalidate(Content $content): void
     {
         $content->approvals()->whereNull('invalidated_at')->update(['invalidated_at' => now()]);
-        $content->publications()->whereIn('status', ['SCHEDULED', 'EXPORT_READY', 'FAILED'])->update(['status' => 'CANCELLED', 'error' => 'Approval invalidated by a content change.']);
+        $content->publications()->whereIn('status', ['SCHEDULED', 'EXPORT_READY', 'FAILED', 'RETRY_PENDING', 'PROCESSING'])->update(['status' => 'CANCELLED', 'error' => 'Approval invalidated by a content change.']);
         $content->final_approved_version_id = null;
     }
 
@@ -69,6 +69,7 @@ class ReviewService
             'parent_version_id' => $content->current_version_id,
             'restored_from_id' => $restoredFrom,
             'snapshot' => $result['snapshot'], 'artifacts' => $result['artifacts'],
+            'references' => $result['references'] ?? ($content->currentVersion?->references ?? ($content->brand_id ? app(BrandIntelligenceAgent::class)->knowledge($content->brand) : [])),
             'changes' => $result['changes'], 'steps' => $result['steps'], 'qa' => $result['qa'],
             'snapshot_hash' => app(ContentSchema::class)->hash($result['snapshot'], $result['artifacts']),
             'mock' => !empty($result['mock']) || !empty($result['artifacts']['voice']['mock']) || !empty($result['artifacts']['video']['mock']),
@@ -113,6 +114,7 @@ class ReviewService
             $c->final_approved_version_id = $v->id;
             $c->status = 'FINAL_APPROVED';
             $c->save();
+            DB::afterCommit(fn () => app(AutomationScheduler::class)->afterApproval($c->fresh(), $userId));
             return $c;
         });
     }
@@ -149,7 +151,7 @@ class ReviewService
             }
             app(PublishingAgent::class)->verifyVersion($source);
             $qa = app(ComplianceQaAgent::class)->check($source->snapshot, $source->artifacts);
-            return $this->append($c, ['snapshot' => $source->snapshot, 'artifacts' => $source->artifacts, 'changes' => $changes, 'steps' => ['restore', 'qa'], 'qa' => $qa], $userId, $source->id);
+            return $this->append($c, ['snapshot' => $source->snapshot, 'artifacts' => $source->artifacts, 'references' => $source->references, 'changes' => $changes, 'steps' => ['restore', 'qa'], 'qa' => $qa], $userId, $source->id);
         });
     }
 }

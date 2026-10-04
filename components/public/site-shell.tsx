@@ -10,9 +10,12 @@ import { MobileNav } from "@/components/public/mobile-nav";
 
 export async function SiteShell({ children }: { children: ReactNode }) {
   let settings: { logo?: string | null } = {};
+  let legalPages: { title: string; slug: string; legal_key: string }[] = [];
   try {
     const response = await safePublicGet<ApiResponse<{ logo?: string | null }>>("settings", { success: false, data: {} });
     settings = response.data || {};
+    const pages = await safePublicGet<ApiResponse<typeof legalPages>>("pages", { success: true, data: [] });
+    legalPages = pages.data || [];
   } catch (error) {
     unstable_rethrow(error);
     console.error("Dewdora public settings API failed", error);
@@ -24,6 +27,6 @@ export async function SiteShell({ children }: { children: ReactNode }) {
       <MobileNav />
     </div></header>
     <main className="mx-auto max-w-6xl px-6 py-6">{children}</main>
-    <footer className="mt-16 border-t border-[#dce6d9] bg-white"><div className="mx-auto max-w-6xl px-6 py-8 text-sm"><p className="max-w-3xl text-[#567069]"><strong>Affiliate disclosure:</strong> Dewdora may earn a commission when you purchase through eligible links, at no additional cost to you. Recommendations remain editorially selected.</p><div className="mt-6 flex flex-wrap justify-between gap-4"><span>© {new Date().getFullYear()} Dewdora</span><div className="flex gap-5"><Link href={routes.contact}>Contact</Link><Link href={routes.login}>Admin</Link></div></div></div></footer>
+    <footer className="mt-16 border-t border-[#dce6d9] bg-white"><div className="mx-auto max-w-6xl px-6 py-8 text-sm"><p className="max-w-3xl text-[#567069]"><strong>Affiliate disclosure:</strong> Dewdora may earn a commission when you purchase through eligible links, at no additional cost to you. Recommendations remain editorially selected.</p><div className="mt-6 flex flex-wrap justify-between gap-4"><span>© {new Date().getFullYear()} Dewdora</span><div className="flex flex-wrap gap-5">{legalPages.map(page => <Link key={page.legal_key} href={routes.legal.show(page.slug)}>{page.title}</Link>)}<Link href={routes.contact}>Contact</Link><Link href={routes.login}>Admin</Link></div></div></div></footer>
   </div>;
 }

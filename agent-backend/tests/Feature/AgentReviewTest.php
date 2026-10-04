@@ -81,6 +81,35 @@ class AgentReviewTest extends TestCase
         $this->postJson($this->root.'/contents/'.$id.'/publications', ['expected_version_id' => 1, 'platform' => 'youtube', 'mode' => 'manual'])->assertConflict();
     }
 
+    public function test_initial_content_accepts_missing_hashtags_and_metadata_then_generates_them(): void
+    {
+        $brand = Brand::create(['name' => 'ElevenLabs', 'slug' => 'elevenlabs-hashtags']);
+        $product = AffiliateProduct::create(['name' => 'Text to Speech', 'slug' => 'tts-hashtags', 'brand_id' => $brand->id, 'affiliate_url' => 'https://example.test/affiliate']);
+        $snapshot = $this->snapshot();
+        foreach (ContentSchema::PLATFORMS as $platform) unset($snapshot['metadata'][$platform]['hashtags']);
+        $this->postJson($this->root.'/contents', ['title' => 'Missing hashtags', 'snapshot' => $snapshot])->assertCreated();
+        unset($snapshot['metadata']);
+        $id = $this->postJson($this->root.'/contents', ['title' => 'Missing all platform metadata', 'brand_id' => $brand->id, 'affiliate_product_id' => $product->id, 'snapshot' => $snapshot])->assertCreated()->json('data.id');
+        $c = Content::findOrFail($id);
+        $this->assertSame([], $c->checkpoint['snapshot']['metadata']['pinterest']['hashtags'] ?? []);
+        $this->qa();
+        $voice = app(AssetStore::class)->put('audio', 'wav', 'audio/wav', true);
+        $video = app(AssetStore::class)->put('video', 'mp4', 'video/mp4', true);
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldReceive('generate')->andReturn($voice));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->andReturn($video));
+        (new GenerateContentJob($id, app(ContentSchema::class)->validate($snapshot), $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
+        $this->assertSame(['#pinterest'], $c->fresh()->currentVersion->snapshot['metadata']['pinterest']['hashtags']);
+        $this->assertSame($product->affiliate_url, $c->fresh()->currentVersion->snapshot['metadata']['youtube']['affiliate_url']);
+    }
+
+    public function test_content_listing_accepts_absent_and_empty_search_parameters(): void
+    {
+        Content::create(['title' => 'ElevenLabs demo', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
+        foreach (['', '?page=1', '?search=', '?search=&page=1', '?search=elevenlabs&page=1'] as $query) {
+            $this->getJson($this->root.'/contents'.$query)->assertOk()->assertJsonPath('data.total', 1);
+        }
+    }
+
     public function test_content_schema_and_product_brand_relationship_are_validated(): void
     {
         $s = $this->snapshot(); $s['scenes'][0]['duration'] = 50;
@@ -208,7 +237,7 @@ class AgentReviewTest extends TestCase
         $id = $this->postJson($this->root.'/contents/'.$c->id.'/publications', $body)->assertCreated()->json('data.id');
         $this->postJson($this->root.'/contents/'.$c->id.'/publications', $body)->assertCreated()->assertJsonPath('data.id', $id);
         app(PublishingAgent::class)->publish($id); app(PublishingAgent::class)->publish($id);
-        $this->assertSame(1, Publication::count());
+        $this->assertSame(5, Publication::count()); // Approval reserves one independent record per platform.
         $this->assertSame('MOCK_PUBLISHED', Publication::find($id)->status);
         $this->assertNull(Publication::find($id)->published_at);
         $manual = app(PublishingAgent::class)->schedule($c->id, ['expected_version_id' => $c->current_version_id, 'platform' => 'pinterest', 'mode' => 'manual'], $this->admin->id);

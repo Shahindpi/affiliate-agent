@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\Admin\Agent\ContentController;
 use App\Http\Controllers\Api\Admin\Agent\PreferenceController;
+use App\Http\Controllers\Api\Admin\Agent\SetupController;
+use App\Http\Controllers\Api\Admin\Agent\SocialAccountController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/admin/affiliate-agent')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
@@ -19,6 +21,37 @@ Route::prefix('v1/admin/affiliate-agent')->middleware(['auth:sanctum', 'admin', 
     Route::post('contents/{content}/publications', [ContentController::class, 'schedule']);
     Route::get('contents/{content}/export', [ContentController::class, 'export']);
     Route::post('publications/{publication}/confirm', [ContentController::class, 'confirm']);
+    Route::get('publications', [ContentController::class, 'publications']);
     Route::apiResource('preferences', PreferenceController::class)->except('show');
+    Route::get('setup', [SetupController::class, 'overview']);
+    Route::get('calendar', [SetupController::class, 'calendar']);
+    Route::get('publishing', [SetupController::class, 'publishing']);
+    Route::get('sources', [SetupController::class, 'sources']);
+    Route::get('campaigns', [SetupController::class, 'campaigns']);
+    Route::post('campaigns', [SetupController::class, 'saveCampaign']);
+    Route::put('campaigns/{campaign}', [SetupController::class, 'saveCampaign']);
+    Route::post('sources', [SetupController::class, 'saveSource']);
+    Route::put('sources/{source}', [SetupController::class, 'saveSource']);
+    Route::post('sources/{source}/test', [SetupController::class, 'testSource']);
+    Route::post('sources/{source}/sync', [SetupController::class, 'sync']);
+    Route::post('sources/{source}/csv', [SetupController::class, 'importCsv']);
+    Route::post('source-documents/{document}/approve', [SetupController::class, 'approveDocument']);
+    Route::get('settings', [SetupController::class, 'settings']);
+    Route::get('voices', [SetupController::class, 'voices']);
+    Route::put('settings', [SetupController::class, 'saveSettings']);
+    Route::get('tests/{provider}', [SetupController::class, 'testProvider']);
+    Route::get('social-accounts', [SocialAccountController::class, 'index']);
+    Route::post('social-accounts/{platform}/connect', [SocialAccountController::class, 'connect']);
+    Route::put('social-accounts/{account}', [SocialAccountController::class, 'update']);
+    Route::delete('social-accounts/{account}', [SocialAccountController::class, 'disconnect']);
+    Route::post('social-accounts/{account}/test', [SocialAccountController::class, 'test']);
+    Route::get('social-accounts/{account}/boards', [SocialAccountController::class, 'boards']);
+    Route::post('social-accounts/{account}/boards', [SocialAccountController::class, 'createBoard']);
+    Route::get('social-accounts/{account}/boards/{boardId}/sections', [SocialAccountController::class, 'sections']);
+    Route::post('social-accounts/{account}/boards/{boardId}/sections', [SocialAccountController::class, 'createSection']);
+    Route::get('social-accounts/{account}/destinations', [SocialAccountController::class, 'destinations']);
+    Route::put('social-accounts/{account}/destinations', [SocialAccountController::class, 'saveDestination']);
 });
 Route::get('v1/affiliate-agent/assets/{version}/{kind}', [ContentController::class, 'asset'])->middleware('signed')->name('agent.asset');
+Route::get('v1/affiliate-agent/oauth/{platform}/callback', [SocialAccountController::class, 'callback'])->name('agent.oauth.callback');
+Route::post('v1/affiliate-agent/webhooks/{source}', [SetupController::class, 'webhook'])->middleware('throttle:api');

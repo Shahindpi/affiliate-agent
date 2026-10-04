@@ -13,6 +13,21 @@ class ContentSchema
 
     public function validate(array $snapshot): array
     {
+        // Initial drafts can precede platform metadata generation. Keep a complete
+        // canonical shape so immutable versions and revisions use one schema.
+        $snapshot['metadata'] ??= [];
+        foreach (self::PLATFORMS as $platform) {
+            $given = $snapshot['metadata'][$platform] ?? [];
+            if (!is_array($given)) continue;
+            $snapshot['metadata'][$platform] = array_replace([
+                'title' => mb_substr($snapshot['script'] ?? 'Draft video', 0, 120),
+                'caption' => $snapshot['captions'] ?? ($snapshot['script'] ?? 'Draft video'),
+                'description' => $snapshot['script'] ?? 'Draft video',
+                'hashtags' => [], 'affiliate_url' => '',
+                'cta' => $snapshot['cta'] ?? '', 'disclosure' => $snapshot['disclosure'] ?? '',
+            ], $given);
+            $snapshot['metadata'][$platform]['hashtags'] ??= [];
+        }
         $rules = [
             'script' => 'required|string|max:6000',
             'scenes' => 'required|array|min:1|max:12',
@@ -33,8 +48,8 @@ class ContentSchema
             foreach (['title', 'caption', 'description', 'cta', 'disclosure'] as $field) {
                 $rules["metadata.$platform.$field"] = 'required|string|max:6000';
             }
-            $rules["metadata.$platform.affiliate_url"] = 'required|url:http,https|max:2000';
-            $rules["metadata.$platform.hashtags"] = 'required|array|max:30';
+            $rules["metadata.$platform.affiliate_url"] = 'present|nullable|url:http,https|max:2000';
+            $rules["metadata.$platform.hashtags"] = 'present|array|max:30';
             $rules["metadata.$platform.hashtags.*"] = 'string|max:100';
         }
         $unknown = array_diff(array_keys($snapshot), array_diff(self::COMPONENTS, ['video']));

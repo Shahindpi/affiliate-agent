@@ -14,4 +14,12 @@ return [
     'ffprobe' => env('AGENT_FFPROBE', 'ffprobe'),
     'render_timeout' => (int) env('AGENT_RENDER_TIMEOUT', 600),
     'max_daily_revisions' => (int) env('AGENT_MAX_DAILY_REVISIONS', 30),
+    'admin_url' => env('AGENT_ADMIN_URL', 'http://localhost:3000/admin/affiliate-agent/social-accounts'),
+    'oauth' => [
+        'pinterest' => ['id' => env('PINTEREST_CLIENT_ID'), 'secret' => env('PINTEREST_CLIENT_SECRET')],
+        'youtube' => ['id' => env('GOOGLE_CLIENT_ID'), 'secret' => env('GOOGLE_CLIENT_SECRET')],
+        'tiktok' => ['id' => env('TIKTOK_CLIENT_KEY'), 'secret' => env('TIKTOK_CLIENT_SECRET')],
+        'meta' => ['id' => env('META_APP_ID'), 'secret' => env('META_APP_SECRET')],
+    ],
+    'meta_graph_version' => env('META_GRAPH_VERSION', 'v23.0'),
 ];

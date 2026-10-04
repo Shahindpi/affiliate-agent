@@ -22,6 +22,7 @@ class ComplianceQaAgent
             'duration' => $duration >= 14.9 && $duration <= 45.5,
             'voice_integrity' => app(AssetStore::class)->verify($artifacts['voice']),
             'disclosures' => trim($snapshot['disclosure']) !== '' && collect($snapshot['metadata'])->every(fn ($m) => trim($m['disclosure']) !== ''),
+            'affiliate_urls' => collect($snapshot['metadata'])->every(fn ($m) => !empty($m['affiliate_url'])),
         ];
         foreach ($artifacts['scenes'] ?? [] as $id => $asset) $checks['scene_'.$id] = app(AssetStore::class)->verify($asset);
         return ['passed' => !in_array(false, $checks, true), 'checks' => $checks, 'duration' => $duration, 'review_required' => 'An admin must verify factual claims, media rights, pronunciation, captions and affiliate disclosure before final approval.'];

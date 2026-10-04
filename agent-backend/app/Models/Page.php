@@ -16,6 +16,7 @@ class Page extends Model
         'user_id',
         'title',
         'slug',
+        'legal_key',
         'excerpt',
         'content',
         'featured_image',

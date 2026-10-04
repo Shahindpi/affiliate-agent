@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-const tabs = [["Overview", ""], ["Review queue", "/review"], ["Content & history", "/contents"], ["Media", "/media"], ["Future preferences", "/preferences"]];
+const tabs = [["Overview", ""], ["Review Queue", "/review"], ["Content & History", "/contents"], ["Media", "/media"], ["Future Preferences", "/preferences"], ["Setup", "/setup"], ["Affiliate Sources", "/sources"], ["Campaigns", "/campaigns"], ["Social Accounts", "/social-accounts"], ["Automation", "/automation"], ["Calendar", "/calendar"], ["Publishing", "/publishing"], ["Settings", "/settings"]];
 export default function AgentNavigation() {
   const pathname = usePathname();
   return <nav aria-label="Affiliate Agent" className="mb-7 flex flex-wrap gap-2">{tabs.map(([label, path]) => {

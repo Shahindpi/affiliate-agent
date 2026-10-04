@@ -17,4 +17,5 @@ class Content extends Model
     public function publications() { return $this->hasMany(Publication::class, 'content_id')->latest(); }
     public function brand() { return $this->belongsTo(\App\Models\Brand::class); }
     public function product() { return $this->belongsTo(\App\Models\AffiliateProduct::class, 'affiliate_product_id'); }
+    public function campaign() { return $this->belongsTo(Campaign::class, 'campaign_id'); }
 }

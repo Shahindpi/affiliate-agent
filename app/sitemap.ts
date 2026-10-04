@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { publicGet, type ListResult } from "@/lib/public-api";
 import { siteOrigin } from "@/lib/seo";
+import type { ApiResponse } from "@/types/api";
 
 export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -16,5 +17,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       page++;
     } while (page <= last);
   }
+  const legal = await publicGet<ApiResponse<{ slug: string; updated_at?: string }[]>>("pages");
+  entries.push(...legal.data.map(page => ({ url: `${siteOrigin}/${encodeURIComponent(page.slug)}`, ...(page.updated_at ? { lastModified: new Date(page.updated_at) } : {}) })));
   return entries;
 }

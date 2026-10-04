@@ -26,7 +26,7 @@ class VoiceAgent
             } finally { if (is_file($tmp)) unlink($tmp); }
         } else {
             if (config('affiliate_agent.voice_provider') !== 'elevenlabs') throw new \RuntimeException('Unsupported voice provider.');
-            $voiceId = $snapshot['voice']['voice_id'] ?: config('affiliate_agent.voice_id');
+            $voiceId = $snapshot['voice']['voice_id'] ?: \App\Models\Agent\Setting::current()->default_voice_id ?: config('affiliate_agent.voice_id');
             if (!$voiceId || !config('affiliate_agent.elevenlabs_key') || !preg_match('/^[\w-]+$/', $voiceId)) throw new \RuntimeException('ElevenLabs voice configuration is missing or invalid.');
             $audio = Http::withHeaders(['xi-api-key' => config('affiliate_agent.elevenlabs_key'), 'Accept' => 'audio/mpeg'])->timeout(120)->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voiceId, ['text' => $snapshot['script'], 'model_id' => config('affiliate_agent.voice_model')])->throw()->body();
             $asset = app(AssetStore::class)->put($audio, 'mp3', 'audio/mpeg');

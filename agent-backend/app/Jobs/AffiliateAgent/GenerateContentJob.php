@@ -24,6 +24,14 @@ class GenerateContentJob implements ShouldQueue
             $c = Content::findOrFail($this->contentId);
             if ($c->current_version_id) return;
             $snapshot = $c->checkpoint['snapshot'] ?? $this->snapshot;
+            if (!$c->checkpoint) {
+                $defaults = app(\App\Services\AffiliateAgent\PlatformMetadataAgent::class)->create($c->title, $snapshot, $c->product?->affiliate_url ?: '');
+                foreach (\App\Services\AffiliateAgent\ContentSchema::PLATFORMS as $platform) {
+                    if (empty($snapshot['metadata'][$platform]['hashtags'])) $snapshot['metadata'][$platform]['hashtags'] = $defaults[$platform]['hashtags'];
+                    if (empty($snapshot['metadata'][$platform]['affiliate_url']) && $c->product?->affiliate_url) $snapshot['metadata'][$platform]['affiliate_url'] = $c->product->affiliate_url;
+                }
+                $snapshot = app(\App\Services\AffiliateAgent\ContentSchema::class)->validate($snapshot);
+            }
             $preferences = app(\App\Services\AffiliateAgent\PreferenceService::class)->applicable($c);
             if (!$c->checkpoint && $preferences && config('affiliate_agent.provider') !== 'mock') {
                 $patch = app(\App\Services\AffiliateAgent\Providers\AIProviderInterface::class)->revise($snapshot, 'Apply these explicitly configured preferences to this new content only: '.json_encode($preferences), 'all', [], $c->id);

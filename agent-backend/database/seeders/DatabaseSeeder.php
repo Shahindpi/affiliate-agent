@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             CommentSeeder::class,
             NewsletterSeeder::class,
             SiteSettingSeeder::class,
+            LegalPageSeeder::class,
             DemoAnalyticsSeeder::class,
         ]);
     }

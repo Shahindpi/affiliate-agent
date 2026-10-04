@@ -31,6 +31,7 @@ const items = [
   { label: "Affiliate Agent", href: "/admin/affiliate-agent", icon: Clapperboard },
   { label: "Affiliate analytics", href: routes.admin.analytics, icon: ChartNoAxesCombined },
   { label: "Posts", href: routes.admin.posts.index, icon: FileText },
+  { label: "Pages", href: routes.admin.pages.index, icon: FileText },
   { label: "Hero banners", href: routes.admin.heroBanners, icon: PanelTop },
   { label: "Homepage sections", href: routes.admin.homepageSettings, icon: PanelTop },
   { label: "Categories", href: routes.admin.categories, icon: FolderTree },

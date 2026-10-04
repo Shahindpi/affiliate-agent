@@ -18,7 +18,7 @@ class VersionResource extends JsonResource
             'id' => $this->id, 'number' => $this->number, 'parent_version_id' => $this->parent_version_id,
             'restored_from_id' => $this->restored_from_id, 'snapshot' => $this->snapshot,
             'assets' => $assets, 'snapshot_hash' => $this->snapshot_hash, 'changes' => $this->changes,
-            'steps' => $this->steps, 'qa' => $this->qa, 'mock' => $this->mock,
+            'steps' => $this->steps, 'qa' => $this->qa, 'references' => $this->references ?? [], 'mock' => $this->mock,
             'created_by' => $this->created_by, 'created_at' => $this->created_at,
         ];
     }

@@ -668,3 +668,12 @@ Route::prefix('v1')->group(function () {
 });
 
 require __DIR__.'/affiliate-agent.php';
+
+Route::get('v1/public/pages', [\App\Http\Controllers\Api\Public\PageController::class, 'index'])->middleware('throttle:api');
+Route::get('v1/public/pages/{slug}', [\App\Http\Controllers\Api\Public\PageController::class, 'show'])->middleware('throttle:api');
+Route::prefix('v1/admin/pages')->middleware(['auth:sanctum', 'admin', 'throttle:api'])->group(function () {
+    Route::get('/', [\App\Http\Controllers\Api\Admin\PageController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\Api\Admin\PageController::class, 'store']);
+    Route::get('{page}', [\App\Http\Controllers\Api\Admin\PageController::class, 'show']);
+    Route::put('{page}', [\App\Http\Controllers\Api\Admin\PageController::class, 'update']);
+});

@@ -8,7 +8,7 @@ class ContentVersion extends Model
 {
     protected $table = 'agent_versions';
     protected $guarded = ['id'];
-    protected function casts(): array { return ['snapshot' => 'array', 'artifacts' => 'array', 'changes' => 'array', 'steps' => 'array', 'qa' => 'array', 'mock' => 'boolean']; }
+    protected function casts(): array { return ['snapshot' => 'array', 'artifacts' => 'array', 'changes' => 'array', 'steps' => 'array', 'qa' => 'array', 'references' => 'array', 'mock' => 'boolean']; }
     public const UPDATED_AT = null;
     protected static function booted(): void
     {

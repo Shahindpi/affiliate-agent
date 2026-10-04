@@ -25,7 +25,7 @@ class ContentController extends Controller
 {
     public function index(Request $r)
     {
-        $data = $r->validate(['status' => 'sometimes|string|max:50', 'search' => 'sometimes|string|max:255', 'page' => 'sometimes|integer|min:1']);
+        $data = $r->validate(['status' => 'sometimes|nullable|string|max:50', 'search' => 'sometimes|nullable|string|max:255', 'page' => 'sometimes|integer|min:1']);
         $query = Content::with(['brand:id,name', 'product:id,name'])->latest();
         if ($r->filled('status')) $query->where('status', $data['status']);
         if ($r->filled('search')) $query->where('title', 'like', '%'.$data['search'].'%');
@@ -34,7 +34,7 @@ class ContentController extends Controller
 
     public function overview()
     {
-        return ApiResponse::success(['counts' => Content::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'), 'ai_provider' => config('affiliate_agent.provider'), 'voice_provider' => config('affiliate_agent.voice_provider'), 'publishing' => 'Manual export and mock test adapters; official API adapters are not configured.', 'usage' => Usage::where('created_at', '>=', now()->startOfMonth())->selectRaw('provider, operation, count(*) as jobs, sum(input_tokens) as input_tokens, sum(output_tokens) as output_tokens, sum(characters) as characters, sum(estimated_cost) as estimated_cost, sum(duration_seconds) as duration_seconds')->groupBy('provider', 'operation')->get()]);
+        return ApiResponse::success(['counts' => Content::selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status'), 'ai_provider' => config('affiliate_agent.provider'), 'voice_provider' => config('affiliate_agent.voice_provider'), 'publishing' => 'Connect social accounts and confirm platform app permissions in Setup. Manual export remains available for every approved version.', 'usage' => Usage::where('created_at', '>=', now()->startOfMonth())->selectRaw('provider, operation, count(*) as jobs, sum(input_tokens) as input_tokens, sum(output_tokens) as output_tokens, sum(characters) as characters, sum(estimated_cost) as estimated_cost, sum(duration_seconds) as duration_seconds')->groupBy('provider', 'operation')->get()]);
     }
 
     public function store(ContentRequest $r, ReviewService $review)
@@ -79,7 +79,7 @@ class ContentController extends Controller
 
     public function schedule(Request $r, Content $content, PublishingAgent $agent)
     {
-        $d = $r->validate(['expected_version_id' => 'required|integer', 'platform' => ['required', Rule::in(ContentSchema::PLATFORMS)], 'mode' => ['required', Rule::in(['manual', 'mock'])], 'scheduled_at' => 'nullable|date|after_or_equal:now']);
+        $d = $r->validate(['expected_version_id' => 'required|integer', 'platform' => ['required', Rule::in(ContentSchema::PLATFORMS)], 'mode' => ['required', Rule::in(['manual', 'mock', 'api'])], 'social_account_id' => 'nullable|integer|exists:agent_social_accounts,id', 'scheduled_at' => 'nullable|date|after_or_equal:now']);
         return ApiResponse::success($agent->schedule($content->id, $d, $r->user()->id), 'Publication scheduled.', 201);
     }
 
@@ -107,6 +107,11 @@ class ContentController extends Controller
     public function media()
     {
         return ApiResponse::success(Media::where('folder', 'affiliate-agent')->latest()->limit(100)->get(['id', 'name', 'mime_type']));
+    }
+
+    public function publications()
+    {
+        return ApiResponse::success(Publication::with(['account:id,platform,name,status', 'content:id,title,status'])->latest()->paginate(30));
     }
 
     // Signed URLs are capability links, issued only to authenticated admins.
