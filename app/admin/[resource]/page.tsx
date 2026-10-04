@@ -1,3 +1,4 @@
 import { notFound } from "next/navigation";
-import { ResourcePage, resources } from "@/components/admin/resources/resource-page";
-export default async function Page({ params }: { params: Promise<{ resource: string }> }) { const { resource } = await params; if (!resources[resource]) notFound(); return <ResourcePage resource={resource} />; }
+import { ResourcePage } from "@/components/admin/resources/resource-page";
+import { resourceConfigs } from "@/components/admin/resources/resource-config";
+export default async function Page({ params }: { params: Promise<{ resource: string }> }) { const { resource } = await params; if (!(resource in resourceConfigs)) notFound(); return <ResourcePage resource={resource} />; }

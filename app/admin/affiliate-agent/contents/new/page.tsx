@@ -1,0 +1,29 @@
+"use client";
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import PageTitle from "@/components/admin/page-title";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { getProductOptions, getAdminProducts } from "@/services/admin-products";
+import { agentMedia, createAgentContent } from "@/services/affiliate-agent";
+import { apiErrorMessage } from "@/lib/api-error";
+import { platforms, type Snapshot } from "@/types/affiliate-agent";
+const selectClass = "mt-2 w-full rounded-lg border bg-background p-2";
+export default function Page() {
+  const router = useRouter(); const [busy, setBusy] = useState(false); const [brand, setBrand] = useState(""); const [product, setProduct] = useState(""); const [url, setUrl] = useState("");
+  const options = useQuery({ queryKey: ["agent-product-options"], queryFn: getProductOptions });
+  const products = useQuery({ queryKey: ["agent-products"], queryFn: () => getAdminProducts({ per_page: "all" }) });
+  const media = useQuery({ queryKey: ["agent-media"], queryFn: agentMedia });
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); setBusy(true); const f = new FormData(e.currentTarget); const text = (key: string) => String(f.get(key) || "");
+    const script = text("script"), title = text("title"), cta = text("cta"), disclosure = text("disclosure"), duration = Number(f.get("duration"));
+    const snapshot: Snapshot = { script, captions: script, cta, disclosure, voice: { voice_id: text("voice_id") || null }, scenes: [{ id: "intro", text: text("intro"), duration: duration / 2, media_id: Number(f.get("intro_media")) || null }, { id: "demo", text: text("demo"), duration: duration / 2, media_id: Number(f.get("demo_media")) || null }], metadata: Object.fromEntries(platforms.map(p => [p, { title, caption: script, description: script, hashtags: [], affiliate_url: url, cta, disclosure }])) as unknown as Snapshot["metadata"] };
+    try { const c = await createAgentContent({ title, brand_id: Number(brand) || null, affiliate_product_id: Number(product) || null, snapshot }); toast.success("Master video queued. Review it after rendering."); router.push(`/admin/affiliate-agent/contents/${c.id}`); }
+    catch (err) { toast.error(apiErrorMessage(err)); } finally { setBusy(false); }
+  }
+  return <><PageTitle title="Create review content" description="Start with a script and scene plan. Laravel generates one master video and sends it to the review queue." /><Card className="max-w-4xl"><CardHeader><CardTitle>Master content draft</CardTitle></CardHeader><CardContent><form onSubmit={submit} className="space-y-5"><label className="block">Title<Input className="mt-2" name="title" required maxLength={255} /></label><div className="grid gap-4 sm:grid-cols-2"><label>Existing brand<select className={selectClass} value={brand} onChange={e => { setBrand(e.target.value); setProduct(""); }}><option value="">Select brand</option>{options.data?.brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Existing affiliate product<select className={selectClass} value={product} onChange={e => { setProduct(e.target.value); const p = products.data?.products.find(p => p.id === Number(e.target.value)); if (p) { setUrl(p.affiliate_url || ""); setBrand(String(p.brand_id || "")); } }}><option value="">Select product</option>{products.data?.products.filter(p => !brand || p.brand_id === Number(brand)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div>{(options.isError || products.isError) && <p role="alert">Catalog options could not be loaded. Check the API connection.</p>}<label className="block">Affiliate URL<Input className="mt-2" type="url" value={url} onChange={e => setUrl(e.target.value)} required /></label><label className="block">Spoken script<Textarea className="mt-2 min-h-32" name="script" required maxLength={6000} placeholder="Write the narration for your short video." /></label><div className="grid gap-4 sm:grid-cols-2">{[["intro", "Opening scene"], ["demo", "Demo / closing scene"]].map(([name, label]) => <div className="rounded-lg border p-4" key={name}><label>{label}<Textarea className="mt-2" name={name} required maxLength={500} /></label><label className="mt-3 block text-sm">Scene media<select className={selectClass} name={`${name}_media`}><option value="">Solid background</option>{media.data?.filter(m => m.mime_type.startsWith("image/") || m.mime_type === "video/mp4").map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label></div>)}</div><div className="grid gap-4 sm:grid-cols-2"><label>Duration (15–45 seconds)<Input className="mt-2" name="duration" type="number" min={15} max={45} defaultValue={25} required /></label><label>Voice ID (optional)<Input className="mt-2" name="voice_id" placeholder="Use the configured default voice" /></label></div><label className="block">CTA<Input className="mt-2" name="cta" defaultValue="Try the tool using the link in the description." required maxLength={500} /></label><label className="block">Affiliate disclosure<Textarea className="mt-2" name="disclosure" defaultValue="Affiliate link: I may earn a commission at no extra cost to you." required maxLength={500} /></label><p className="text-sm text-muted-foreground">Each platform receives draft metadata that you can edit during review. Configured preferences apply to new content with the live AI provider; mock mode uses your draft verbatim and produces a labelled test-tone preview.</p><Button type="submit" disabled={busy}>Generate master video for review</Button></form></CardContent></Card></>;
+}

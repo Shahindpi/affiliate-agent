@@ -24,7 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(\App\Services\AffiliateAgent\Providers\AIProviderInterface::class, function () {
+            return match (config('affiliate_agent.provider')) {
+                'mock' => new \App\Services\AffiliateAgent\Providers\MockAIProvider,
+                'openai' => new \App\Services\AffiliateAgent\Providers\OpenAIProvider,
+                default => throw new \RuntimeException('Unsupported AI provider.'),
+            };
+        });
     }
 
     public function boot(): void

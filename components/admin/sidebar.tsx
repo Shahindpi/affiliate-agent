@@ -23,10 +23,12 @@ import {
   Settings,
   Users,
   ShieldCheck,
+  Clapperboard,
 } from "lucide-react";
 
 const items = [
   { label: "Dashboard", href: routes.admin.dashboard, icon: LayoutDashboard },
+  { label: "Affiliate Agent", href: "/admin/affiliate-agent", icon: Clapperboard },
   { label: "Affiliate analytics", href: routes.admin.analytics, icon: ChartNoAxesCombined },
   { label: "Posts", href: routes.admin.posts.index, icon: FileText },
   { label: "Hero banners", href: routes.admin.heroBanners, icon: PanelTop },

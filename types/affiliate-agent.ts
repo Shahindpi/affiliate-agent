@@ -1,0 +1,14 @@
+export const platforms = ["pinterest", "instagram", "tiktok", "facebook", "youtube"] as const;
+export type Platform = typeof platforms[number];
+export const components = ["script", "scenes", "captions", "cta", "disclosure", "metadata", "voice", "video"] as const;
+export type Scene = { id: string; text: string; duration: number; media_id: number | null };
+export type PlatformMetadata = { title: string; caption: string; description: string; hashtags: string[]; affiliate_url: string; cta: string; disclosure: string };
+export type Snapshot = { script: string; scenes: Scene[]; captions: string; cta: string; disclosure: string; voice: { voice_id: string | null }; metadata: Record<Platform, PlatformMetadata> };
+export type Version = { id: number; number: number; parent_version_id: number | null; restored_from_id: number | null; snapshot: Snapshot; snapshot_hash: string; assets: Record<"video" | "voice", { url: string; mock: boolean }>; changes: { component: string; before: unknown; after: unknown }[]; steps: string[]; qa: { passed: boolean; checks: Record<string, boolean>; duration: number; review_required: string }; mock: boolean; created_at: string };
+export type Feedback = { id: number; base_version_id: number; result_version_id: number | null; feedback: string; target: string; status: string; error: string | null; created_at: string };
+export type Publication = { id: number; version_id: number; platform: Platform; mode: string; status: string; scheduled_at: string; external_id: string | null; error: string | null };
+export type AgentContent = { id: number; title: string; brand_id: number | null; affiliate_product_id: number | null; brand?: { id: number; name: string }; product?: { id: number; name: string }; current_version_id: number | null; final_approved_version_id: number | null; status: string; locks: string[]; versions: Version[]; feedback: Feedback[]; publications: Publication[]; approvals: { id: number; version_id: number; approved_by: number; approved_at: string; invalidated_at: string | null }[] };
+export type Preference = { id: number; scope: "global" | "brand" | "product"; brand_id: number | null; affiliate_product_id: number | null; component: string; instruction: string; enabled: boolean; source_feedback_id?: number | null };
+export type PreferencePayload = Omit<Preference, "id">;
+export type AgentMedia = { id: number; name: string; mime_type: string };
+export type Overview = { counts: Record<string, number>; ai_provider: string; voice_provider: string; publishing: string; usage: { provider: string; operation: string; jobs: number; input_tokens: number; output_tokens: number; characters: number; estimated_cost: number | null; duration_seconds: number | null }[] };
