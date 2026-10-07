@@ -13,7 +13,7 @@ class AutomationScheduler
     {
         Cache::put('affiliate-agent:last-scheduler-tick', now()->toIso8601String(), now()->addDays(2));
         $settings = Setting::current();
-        Source::where('enabled', true)->whereNotNull('next_sync_at')->where('next_sync_at', '<=', now())->limit(10)->get()->each(function ($s) {
+        Source::where('enabled', true)->where('status', '!=', 'SYNCING')->whereNotNull('next_sync_at')->where('next_sync_at', '<=', now())->limit(10)->get()->each(function ($s) {
             $s->update(['next_sync_at' => now()->addHours($s->frequency_hours)]);
             SyncSourceJob::dispatch($s->id);
         });

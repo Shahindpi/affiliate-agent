@@ -2,7 +2,7 @@ import api from "@/lib/axios";
 import type { ApiResponse } from "@/types/api";
 
 const root = "/admin/affiliate-agent";
-export type Source = { id: number; brand_id: number; name: string; type: string; url: string | null; notes: string | null; allowed_domains: string[] | null; enabled: boolean; status: string; last_error: string | null; last_synced_at: string | null; next_sync_at: string | null; documents: { id: number; title: string; body: string; status: string; source_url: string; synced_at: string }[]; runs: { id: number; status: string; error: string | null }[] };
+export type Source = { id: number; brand_id: number; name: string; type: string; url: string | null; notes: string | null; allowed_domains: string[] | null; enabled: boolean; status: string; sync_is_stale: boolean; last_error: string | null; last_tested_at: string | null; last_test_status: string | null; last_test_error: string | null; last_synced_at: string | null; next_sync_at: string | null; sync_started_at: string | null; last_sync_failed_at: string | null; last_http_status: number | null; documents: { id: number; title: string; body: string; status: string; source_url: string; synced_at: string }[]; runs: { id: number; status: string; error: string | null; started_at: string; finished_at: string | null; http_status: number | null; content_changed: boolean | null; extracted_items: number; metadata: Record<string, unknown> | null }[] };
 export type Campaign = { id: number; brand_id: number; affiliate_product_id: number | null; name: string; brief: string; priority: number; monthly_target: number; starts_on: string | null; ends_on: string | null; enabled: boolean };
 export const getCampaigns = async () => (await api.get<ApiResponse<Campaign[]>>(`${root}/campaigns`)).data.data;
 export const saveCampaign = async (data: Omit<Campaign, "id">, id?: number) => (await (id ? api.put(`${root}/campaigns/${id}`, data) : api.post(`${root}/campaigns`, data))).data.data;
@@ -12,7 +12,7 @@ export type SetupData = { openai: boolean; elevenlabs: boolean; providers: Recor
 export const getSetup = async () => (await api.get<ApiResponse<SetupData>>(`${root}/setup`)).data.data;
 export const getSources = async () => (await api.get<ApiResponse<Source[]>>(`${root}/sources`)).data.data;
 export const saveSource = async (data: Record<string, unknown>, id?: number) => (await (id ? api.put(`${root}/sources/${id}`, data) : api.post(`${root}/sources`, data))).data.data;
-export const sourceAction = async (id: number, action: "test" | "sync") => (await api.post(`${root}/sources/${id}/${action}`)).data.data;
+export const sourceAction = async (id: number, action: "test" | "sync") => (await api.post<ApiResponse<{ ok: boolean; message?: string; source: Source }>>(`${root}/sources/${id}/${action}`)).data.data;
 export const approveSourceDocument = async (id: number) => (await api.post(`${root}/source-documents/${id}/approve`)).data.data;
 export const importSourceCsv = async (id: number, file: File) => { const form = new FormData(); form.append("file", file); return (await api.post(`${root}/sources/${id}/csv`, form)).data.data; };
 export const getSocialAccounts = async () => (await api.get<ApiResponse<{ accounts: SocialAccount[]; configured: Record<string, boolean> }>>(`${root}/social-accounts`)).data.data;

@@ -15,6 +15,7 @@ use App\Services\AffiliateAgent\SourceSyncService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\Process\Process;
@@ -91,29 +92,55 @@ class SetupController extends Controller
     public function saveSource(Request $r, ?Source $source = null)
     {
         $data = $r->validate(['brand_id' => 'required|exists:brands,id,deleted_at,NULL', 'affiliate_product_id' => 'nullable|exists:affiliate_products,id,deleted_at,NULL', 'name' => 'required|string|max:255', 'type' => ['required', Rule::in(['API','OFFICIAL_WEBSITE','OFFICIAL_DOCS','RSS_OR_FEED','CSV_IMPORT','MANUAL','WEBHOOK'])], 'url' => 'nullable|url:https|max:2000', 'credentials' => 'nullable|string|max:4000', 'notes' => 'nullable|string|max:20000', 'allowed_domains' => 'nullable|array|max:10', 'allowed_domains.*' => 'string|max:255', 'priority' => 'integer|between:0,100', 'frequency_hours' => 'integer|between:1,720', 'enabled' => 'boolean']);
+        $domains = [];
+        foreach ($data['allowed_domains'] ?? [] as $entry) {
+            $entry = strtolower(trim($entry));
+            if (str_contains($entry, '://')) {
+                $parts = parse_url($entry);
+                if (!$parts || ($parts['scheme'] ?? '') !== 'https' || isset($parts['user']) || isset($parts['pass']) || isset($parts['port'])) {
+                    throw ValidationException::withMessages(['allowed_domains' => 'Use hostnames or HTTPS URLs without credentials or ports.']);
+                }
+                $entry = $parts['host'] ?? '';
+            }
+            // A source must be addressed by its HTTPS hostname; a raw IP is never an allowed source.
+            if (filter_var($entry, FILTER_VALIDATE_IP)) continue;
+            if (!str_contains($entry, '.') || !filter_var($entry, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+                throw ValidationException::withMessages(['allowed_domains' => 'Use a valid domain such as elevenlabs.io.']);
+            }
+            $domains[] = $entry;
+        }
+        $data['allowed_domains'] = array_values(array_unique($domains));
         if (!empty($data['affiliate_product_id']) && !\App\Models\AffiliateProduct::whereKey($data['affiliate_product_id'])->where('brand_id', $data['brand_id'])->exists()) return response()->json(['message' => 'Product must belong to brand.'], 422);
         if (in_array($data['type'] ?? null, ['OFFICIAL_WEBSITE', 'OFFICIAL_DOCS', 'RSS_OR_FEED', 'API'], true) && empty($data['url'])) return response()->json(['message' => 'Source URL required.'], 422);
         if (!empty($data['url'])) {
             $host = strtolower((string) parse_url($data['url'], PHP_URL_HOST));
-            if (!in_array($host, $data['allowed_domains'] ?? [], true)) return response()->json(['message' => 'Add the source hostname to allowed domains.'], 422);
+            if (filter_var($host, FILTER_VALIDATE_IP) || !in_array($host, $data['allowed_domains'], true)) {
+                throw ValidationException::withMessages(['allowed_domains' => 'Add the source hostname "'.$host.'" to allowed domains (not its IP address).']);
+            }
         }
         if ($source) { if ($source->brand_id !== (int) $data['brand_id']) return response()->json(['message' => 'Brand cannot be changed on an existing source.'], 422); $source->update($data); }
         else $source = Source::create($data);
-        return ApiResponse::success($source, 'Source saved.', $source->wasRecentlyCreated ? 201 : 200);
+        $created = $source->wasRecentlyCreated;
+        return ApiResponse::success($source->refresh(), 'Source saved.', $created ? 201 : 200);
     }
 
     public function testSource(Source $source, SourceSyncService $service)
     {
-        if ($source->type === 'MANUAL') return ApiResponse::success(['message' => 'Manual notes are ready for synchronization.']);
-        $service->checkUrl($source);
-        return ApiResponse::success(['message' => 'Trusted host resolves to a public IP. Sync Now fetches the configured URL.']);
+        return ApiResponse::success($service->test($source));
     }
 
-    public function sync(Source $source)
+    public function sync(Source $source, SourceSyncService $service)
     {
         abort_unless($source->enabled, 409, 'Enable this source before syncing.');
-        SyncSourceJob::dispatch($source->id);
-        return ApiResponse::success(['status' => 'QUEUED'], 'Source synchronization queued.', 202);
+        abort_if($source->status === 'SYNCING' && $source->sync_started_at?->gt(now()->subMinutes(3)), 409, 'Source is already syncing.');
+        try {
+            $service->sync($source);
+            return ApiResponse::success(['ok' => true, 'source' => $source->fresh()->load('runs', 'documents')], 'Source synchronized.');
+        } catch (\Throwable $e) {
+            if ($source->fresh()->status === 'SYNCING') abort(409, 'Source is already syncing.');
+            if (!$e instanceof ValidationException) report($e);
+            return ApiResponse::success(['ok' => false, 'source' => $source->fresh()->load('runs', 'documents'), 'message' => $e->getMessage()], 'Source synchronization failed.');
+        }
     }
 
     public function importCsv(Source $source, Request $r, SourceSyncService $service)

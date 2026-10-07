@@ -38,13 +38,25 @@ class AgentAutomationTest extends TestCase
         $source = $this->postJson($this->root.'/sources', ['brand_id' => $brand->id, 'name' => 'Official notes', 'type' => 'MANUAL', 'notes' => 'Voice synthesis information from the official product documentation.', 'credentials' => 'secret-example'])->assertCreated()->json('data');
         $this->assertStringNotContainsString('secret-example', Source::find($source['id'])->getRawOriginal('credentials'));
         $this->getJson($this->root.'/sources')->assertOk()->assertDontSee('secret-example');
-        $this->postJson($this->root.'/sources/'.$source['id'].'/sync')->assertAccepted();
-        Queue::assertPushed(SyncSourceJob::class);
-        app(SourceSyncService::class)->sync(Source::find($source['id']));
+        $this->postJson($this->root.'/sources/'.$source['id'].'/sync')->assertOk()->assertJsonPath('data.source.status', 'SYNCED');
         $document = Source::find($source['id'])->documents()->first();
         $this->assertSame('PENDING', $document->status);
         $this->postJson($this->root.'/source-documents/'.$document->id.'/approve')->assertOk();
         $this->assertSame('APPROVED', $document->fresh()->status);
+    }
+
+    public function test_source_allowed_domains_accept_https_url_input_and_ignore_raw_ip(): void
+    {
+        $brand = Brand::create(['name' => 'ElevenLabs', 'slug' => 'elevenlabs-source', 'status' => true]);
+        $payload = ['brand_id' => $brand->id, 'name' => 'Official ElevenLabs', 'type' => 'OFFICIAL_WEBSITE',
+            'url' => 'https://elevenlabs.io/', 'allowed_domains' => ['34.54.252.193', 'https://elevenlabs.io/']];
+        $this->postJson($this->root.'/sources', $payload)->assertCreated()
+            ->assertJsonPath('data.allowed_domains', ['elevenlabs.io']);
+        $this->assertSame(['elevenlabs.io'], Source::firstOrFail()->allowed_domains);
+        $this->postJson($this->root.'/sources', [...$payload, 'allowed_domains' => ['34.54.252.193']])
+            ->assertUnprocessable()->assertJsonValidationErrors('allowed_domains');
+        $this->postJson($this->root.'/sources', [...$payload, 'allowed_domains' => ['http://elevenlabs.io/']])
+            ->assertUnprocessable()->assertJsonValidationErrors('allowed_domains');
     }
 
     public function test_mix_deficit_and_daily_scheduler_queue_only_target_count(): void

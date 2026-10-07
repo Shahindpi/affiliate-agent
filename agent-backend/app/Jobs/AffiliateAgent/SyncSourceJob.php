@@ -10,7 +10,12 @@ use Illuminate\Foundation\Queue\Queueable;
 class SyncSourceJob implements ShouldQueue
 {
     use Queueable;
-    public int $tries = 2;
+    public int $tries = 1;
     public function __construct(public int $sourceId) { $this->onQueue('agent-sources'); }
-    public function handle(SourceSyncService $service): void { $service->sync(Source::findOrFail($this->sourceId)); }
+    public function handle(SourceSyncService $service): void
+    {
+        $source = Source::findOrFail($this->sourceId);
+        if (!$source->enabled || $source->status === 'SYNCING') return;
+        $service->sync($source);
+    }
 }

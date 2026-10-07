@@ -34,9 +34,34 @@ class VideoComposerAgent
                 }
                 $n = count($snapshot['scenes']);
                 array_push($command, '-i', $voice);
-                file_put_contents($tmp.'/captions.ass', $this->subtitles($snapshot, !empty($artifacts['voice']['mock'])));
-                $inputs = implode('', array_map(fn ($i) => "[v$i]", range(0, $n - 1)));
-                $filters[] = "$inputs concat=n=$n:v=1:a=0,subtitles='$tmp/captions.ass'[out]";
+                $captionPath = $tmp.'/captions.ass';
+
+                file_put_contents(
+                    $captionPath,
+                    $this->subtitles($snapshot, !empty($artifacts['voice']['mock']))
+                );
+
+                // FFmpeg filter paths require special escaping, especially on Windows.
+                $ffmpegCaptionPath = str_replace('\\', '/', $captionPath);
+
+                // Escape the Windows drive colon, e.g. E:/... -> E\:/...
+                $ffmpegCaptionPath = preg_replace('/^([A-Za-z]):/', '$1\\:', $ffmpegCaptionPath);
+
+                // Escape characters significant inside FFmpeg filter values.
+                $ffmpegCaptionPath = str_replace(
+                    ["'", '[', ']', ','],
+                    ["\\'", '\\[', '\\]', '\\,'],
+                    $ffmpegCaptionPath
+                );
+
+                $inputs = implode('', array_map(
+                    fn ($i) => "[v$i]",
+                    range(0, $n - 1)
+                ));
+
+                $filters[] =
+                    "$inputs concat=n=$n:v=1:a=0,".
+                    "subtitles=filename='$ffmpegCaptionPath'[out]";
                 $filters[] = "[$n:a]apad,atrim=duration={$duration}[aout]";
                 array_push($command, '-filter_complex_threads', '1', '-filter_complex', implode(';', $filters), '-map', '[out]', '-map', '[aout]', '-t', (string) $duration, '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', $tmp.'/master.mp4');
                 $p = new Process($command);
