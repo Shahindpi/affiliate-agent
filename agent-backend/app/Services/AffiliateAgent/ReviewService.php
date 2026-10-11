@@ -47,7 +47,7 @@ class ReviewService
             $content = Content::lockForUpdate()->findOrFail($id);
             $base = $this->current($content, $data['expected_version_id']);
             if ($content->status === 'REVISION_PENDING') abort(409, 'A revision is already in progress.');
-            if (Feedback::whereDate('created_at', today())->count() >= config('affiliate_agent.max_daily_revisions')) abort(429, 'Daily revision limit reached.');
+            if (Feedback::whereDate('created_at', today())->whereNotIn('status', ['FAILED', 'REJECTED'])->count() >= config('affiliate_agent.max_daily_revisions')) abort(429, 'Daily revision limit reached.');
             app(ContentSchema::class)->validateTarget($data['target'] ?? 'all', $base->snapshot);
             if (isset($data['patch'])) {
                 $new = app(ContentSchema::class)->validate(array_replace($base->snapshot, $data['patch']));

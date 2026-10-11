@@ -15,13 +15,20 @@ use Illuminate\Validation\ValidationException;
 class ReviseContentJob implements ShouldQueue
 {
     use Queueable;
-    public int $tries = 3;
+    public int $tries = 40; // Lock contention may last until the owning worker or its TTL ends.
+    public int $maxExceptions = 3;
     public int $timeout = 850;
+    public bool $failOnTimeout = true;
     public function backoff(): array { return [30, 120, 300]; }
     public function __construct(public int $feedbackId) { $this->onQueue('agent-revisions'); }
     public function handle(RevisionAgent $agent, ReviewService $review): void
     {
-        Cache::lock('agent-feedback:'.$this->feedbackId, 900)->block(5, function () use ($agent, $review) {
+        $lock = Cache::lock('agent-feedback:'.$this->feedbackId, 900);
+        if (!$lock->get()) {
+            if ($this->job) $this->release(30);
+            return;
+        }
+        try {
             $feedback = Feedback::findOrFail($this->feedbackId);
             if (in_array($feedback->status, ['COMPLETED', 'FAILED'], true)) return;
             $feedback->update(['status' => 'PROCESSING', 'error' => null]);
@@ -37,9 +44,19 @@ class ReviseContentJob implements ShouldQueue
             } catch (ValidationException $e) {
                 $this->markFailed(implode(' ', array_merge(...array_values($e->errors()))));
             }
-        });
+        } catch (\Throwable $e) {
+            report($e);
+            throw $e;
+        } finally {
+            $lock->release();
+        }
     }
-    public function failed(?\Throwable $e): void { $this->markFailed('Revision failed. Check provider configuration and queue logs, then submit again.'); }
+    public function failed(?\Throwable $e): void
+    {
+        if ($e) report($e);
+        $message = config('app.debug') && $e ? 'Revision failed: '.$e->getMessage() : 'Revision failed. Check provider configuration and queue logs, then submit again.';
+        $this->markFailed(mb_substr($message, 0, 2000));
+    }
     private function markFailed(string $message): void
     {
         DB::transaction(function () use ($message) {

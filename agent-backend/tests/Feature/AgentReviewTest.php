@@ -21,15 +21,19 @@ use App\Services\AffiliateAgent\Providers\AIProviderInterface;
 use App\Services\AffiliateAgent\PublishingAgent;
 use App\Services\AffiliateAgent\ReviewService;
 use App\Services\AffiliateAgent\RevisionAgent;
+use App\Services\AffiliateAgent\RevisionPlanner;
+use App\Services\AffiliateAgent\SceneDesignAgent;
 use App\Services\AffiliateAgent\VideoComposerAgent;
 use App\Services\AffiliateAgent\VoiceAgent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\Sanctum;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class AgentReviewTest extends TestCase
@@ -366,7 +370,12 @@ class AgentReviewTest extends TestCase
         Queue::fake();
         $before = glob(storage_path('app/agent-tmp/*')) ?: [];
         $c = Content::create(['title' => 'Real render check', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
-        (new GenerateContentJob($c->id, $this->snapshot(), $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
+        $snapshot = $this->snapshot();
+        $snapshot['scenes'] = app(SceneDesignAgent::class)->decorate($snapshot['scenes'], $c->id, 'Technology product');
+        $snapshot['scenes'][0]['headline'] = 'Turn text into a voice';
+        $snapshot['scenes'][0]['body'] = 'A clear product demonstration';
+        $snapshot['scenes'][0]['template'] = 'link_in_bio';
+        (new GenerateContentJob($c->id, $snapshot, $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
         $v = $c->fresh()->currentVersion;
         $this->assertTrue($v->qa['passed']);
         $this->assertTrue($v->mock);
@@ -374,5 +383,123 @@ class AgentReviewTest extends TestCase
         $this->assertSame(['voice', 'render', 'qa'], $v->steps);
         $this->assertDatabaseHas('agent_usage', ['operation' => 'render', 'provider' => 'ffmpeg']);
         $this->assertSame($before, glob(storage_path('app/agent-tmp/*')) ?: []);
+    }
+
+    public function test_scene_design_metadata_templates_and_render_only_revision_are_preserved(): void
+    {
+        $original = $this->snapshot();
+        $scenes = app(SceneDesignAgent::class)->decorate($original['scenes'], 5, 'Technology product');
+        $this->assertSame('animated_abstract', $scenes[0]['background_type']);
+        $this->assertSame('hook', $scenes[0]['purpose']);
+        $this->assertSame('cta_button', $scenes[1]['template']);
+        $scenes[0]['headline'] = 'A clear product headline';
+        $scenes[0]['body'] = 'A smaller supporting line';
+        $scenes[0]['template'] = 'link_in_bio';
+        $scenes[0]['animation'] = 'slide_in';
+        $revised = app(ContentSchema::class)->validate([...$original, 'scenes' => $scenes]);
+        $this->assertSame('A clear product headline', $revised['scenes'][0]['headline']);
+        $plan = app(RevisionPlanner::class)->plan($original, $revised, []);
+        $this->assertSame(['render', 'qa'], $plan['steps']);
+        $this->assertSame('scenes.intro', $plan['changes'][0]['component']);
+        $ass = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke(app(VideoComposerAgent::class), $revised, false);
+        $this->assertStringContainsString('Style: Headline,DejaVu Sans,82', $ass);
+        $this->assertStringContainsString('Style: Body,DejaVu Sans,47', $ass);
+        $this->assertStringContainsString('Style: CTA,DejaVu Sans,50', $ass);
+        $this->assertStringContainsString('A clear product headline', $ass);
+        $this->assertStringContainsString('A smaller supporting line', $ass);
+        $this->assertStringContainsString('Link in bio', $ass);
+        try { app(RevisionPlanner::class)->plan($original, $revised, ['video']); $this->fail('Locked video must block a scene render.'); }
+        catch (\Illuminate\Validation\ValidationException) { /* Expected. */ }
+    }
+
+    public function test_invalid_provider_enums_are_normalized_without_changing_locked_components(): void
+    {
+        $this->qa(); $c = $this->content();
+        $scenes = $c->currentVersion->snapshot['scenes'];
+        $scenes[0] = app(SceneDesignAgent::class)->decorate([$scenes[0]], $c->id)[0];
+        $scenes[0]['purpose'] = 'Introduce the product with a hook';
+        $scenes[0]['animation'] = 'Headline fades up first';
+        $scenes[0]['background_type'] = 'Animated audio waveform';
+        $scenes[0]['headline'] = 'Voiceovers in seconds';
+        $this->mock(AIProviderInterface::class, fn ($m) => $m->shouldReceive('revise')->once()->andReturn(['scenes' => $scenes]));
+        $video = app(AssetStore::class)->put('new video', 'mp4', 'video/mp4', true);
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andReturn($video));
+        $id = $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $c->current_version_id, 'feedback' => 'Use a stronger visual hook.', 'target' => 'scenes.intro'])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $scene = $c->fresh()->currentVersion->snapshot['scenes'][0];
+        $this->assertSame('hook', $scene['purpose']);
+        $this->assertSame('fade_up', $scene['animation']);
+        $this->assertSame('animated_abstract', $scene['background_type']);
+        $this->assertSame('COMPLETED', Feedback::findOrFail($id)->status);
+    }
+
+    public function test_unrecoverable_render_failure_resets_review_and_failed_revisions_do_not_use_daily_allowance(): void
+    {
+        $c = $this->content();
+        config(['affiliate_agent.max_daily_revisions' => 1, 'app.debug' => true]);
+        $id = $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $c->current_version_id, 'feedback' => 'Update captions', 'patch' => ['captions' => 'Better captions']])->assertAccepted()->json('data.id');
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andThrow(new \RuntimeException('FFmpeg unavailable')));
+        try { $this->execute($id); $this->fail('Render should fail.'); } catch (\RuntimeException $e) { $this->assertSame('FFmpeg unavailable', $e->getMessage()); }
+        (new ReviseContentJob($id))->failed(new \RuntimeException('FFmpeg unavailable'));
+        $this->assertSame('FAILED', Feedback::findOrFail($id)->status);
+        $this->assertStringContainsString('FFmpeg unavailable', Feedback::findOrFail($id)->error);
+        $this->assertSame('REVIEW_PENDING', $c->fresh()->status);
+        $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $c->current_version_id, 'feedback' => 'Another update', 'patch' => ['captions' => 'Another caption']])->assertAccepted();
+    }
+
+    public function test_revision_lock_contention_leaves_queued_feedback_untouched_until_retry(): void
+    {
+        $this->qa(); $c = $this->content();
+        $id = $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $c->current_version_id, 'feedback' => 'set metadata.youtube.title: Better title'])->assertAccepted()->json('data.id');
+        $lock = Cache::lock('agent-feedback:'.$id, 900); $this->assertTrue($lock->get());
+        try {
+            $this->execute($id);
+            $this->assertSame('QUEUED', Feedback::findOrFail($id)->status);
+            $this->assertSame('REVISION_PENDING', $c->fresh()->status);
+        } finally { $lock->release(); }
+        $this->execute($id);
+        $this->assertSame('COMPLETED', Feedback::findOrFail($id)->status);
+    }
+
+    public function test_real_revision_expands_scene_timing_and_serves_new_vertical_mp4(): void
+    {
+        $c = Content::create(['title' => 'Timing revision', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
+        $tmp = sys_get_temp_dir().'/agent-voice-'.bin2hex(random_bytes(8)).'.wav';
+        try {
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:sample_rate=44100', '-t', '16', $tmp]))->mustRun();
+            $voice = app(AssetStore::class)->put(file_get_contents($tmp), 'wav', 'audio/wav', true);
+        } finally { @unlink($tmp); }
+        $artifacts = ['voice' => $voice, 'video' => app(AssetStore::class)->put('base video', 'mp4', 'video/mp4', true), 'scenes' => []];
+        $base = app(ReviewService::class)->append($c, ['snapshot' => $this->snapshot(), 'artifacts' => $artifacts, 'steps' => ['voice', 'render', 'qa'], 'changes' => [], 'qa' => ['passed' => true]], $this->admin->id);
+        $id = $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $base->id, 'feedback' => 'Improve visible captions', 'patch' => ['captions' => 'The updated, readable caption.']])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $v = $c->fresh()->currentVersion;
+        $this->assertSame('COMPLETED', Feedback::findOrFail($id)->status);
+        $this->assertSame('REVIEW_PENDING', $c->fresh()->status);
+        $this->assertSame(2, $c->versions()->count());
+        $this->assertGreaterThan(16, array_sum(array_column($v->snapshot['scenes'], 'duration')));
+        $this->assertTrue($v->qa['passed']);
+        $this->assertTrue(app(AssetStore::class)->verify($v->artifacts['video']));
+        $this->assertNotSame($base->artifacts['video']['sha256'], $v->artifacts['video']['sha256']);
+        $versions = $this->getJson($this->root.'/contents/'.$c->id)->assertOk()->json('data.versions');
+        $url = collect($versions)->firstWhere('id', $v->id)['assets']['video']['url'];
+        $this->get($url)->assertOk()->assertHeader('content-type', 'video/mp4');
+    }
+
+    public function test_narration_over_45_seconds_fails_clearly_and_ffmpeg_path_supports_both_os_formats(): void
+    {
+        $composer = app(VideoComposerAgent::class);
+        $path = new \ReflectionMethod(VideoComposerAgent::class, 'ffmpegFilterPath');
+        $this->assertSame('/tmp/agent/captions.ass', $path->invoke($composer, '/tmp/agent/captions.ass'));
+        $this->assertSame('E\\\\:/server/htdocs/agent/captions.ass', $path->invoke($composer, 'E:\\server\\htdocs\\agent\\captions.ass'));
+        $c = $this->content(); $snapshot = $c->currentVersion->snapshot;
+        $tmp = sys_get_temp_dir().'/agent-long-'.bin2hex(random_bytes(8)).'.wav';
+        try {
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:sample_rate=44100', '-t', '46', $tmp]))->mustRun();
+            $artifacts = $c->currentVersion->artifacts;
+            $artifacts['voice'] = app(AssetStore::class)->put(file_get_contents($tmp), 'wav', 'audio/wav', true);
+            $this->expectExceptionMessage('Narration exceeds maximum 45-second video duration. Please shorten spoken script.');
+            $composer->render($snapshot, $artifacts, $c->id);
+        } finally { @unlink($tmp); }
     }
 }

@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import PageTitle from "@/components/admin/page-title";
 import { getSources, saveSource, sourceAction, approveSourceDocument, importSourceCsv, type Source } from "@/services/agent-setup";
 import { apiErrorMessage } from "@/lib/api-error";
+import { allResourceOptions } from "@/services/admin-resources";
+import type { Brand } from "@/types/product";
 
 const types = ["OFFICIAL_WEBSITE", "OFFICIAL_DOCS", "API", "RSS_OR_FEED", "MANUAL", "CSV_IMPORT", "WEBHOOK"];
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : "Never";
@@ -13,6 +15,8 @@ const date = (value: string | null) => value ? new Date(value).toLocaleString() 
 export default function Page() {
   const client = useQueryClient();
   const [busy, setBusy] = useState<{ id: number; kind: "test" | "sync" } | null>(null);
+  const [brandSearch, setBrandSearch] = useState("");
+  const brands = useQuery({ queryKey: ["agent-source-brands"], queryFn: () => allResourceOptions<Brand>("brands") });
   const q = useQuery({ queryKey: ["agent-sources"], queryFn: getSources, refetchInterval: query => busy !== null || query.state.data?.some(s => s.status === "SYNCING") ? 2000 : false });
   const [form, setForm] = useState({ id: 0, brand_id: "", name: "", type: "OFFICIAL_WEBSITE", url: "", notes: "", allowed_domains: "", enabled: true });
   const refresh = () => client.invalidateQueries({ queryKey: ["agent-sources"] });
@@ -44,11 +48,11 @@ export default function Page() {
   return <><PageTitle title="Affiliate sources" description="Test connectivity separately from syncing. Inspect extracted facts before approving them for generation." />
     <form onSubmit={submit} className="mb-7 grid gap-3 rounded-lg border bg-background p-4 sm:grid-cols-2">
       <h2 className="sm:col-span-2 font-semibold">{form.id ? "Edit source" : "Add source"}</h2>
-      <label>Brand ID<input className="w-full rounded border p-2" type="number" min="1" required value={form.brand_id} onChange={e => setForm({ ...form, brand_id: e.target.value })} /></label>
+      <label>Brand<input className="mt-2 w-full rounded border p-2" type="search" value={brandSearch} onChange={e => setBrandSearch(e.target.value)} placeholder="Search brands" aria-label="Search brands" /><select className="mt-2 w-full rounded border bg-background p-2" required value={form.brand_id} onChange={e => setForm({ ...form, brand_id: e.target.value })}><option value="">Select an existing brand</option>{brands.data?.filter(b => !brandSearch || b.name.toLowerCase().includes(brandSearch.toLowerCase()) || String(b.id) === form.brand_id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>{brands.isError && <span role="alert" className="text-sm text-destructive">Could not load brands.</span>}</label>
       <label>Name<input className="w-full rounded border p-2" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
       <label>Type<select className="w-full rounded border p-2" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>{types.map(x => <option key={x}>{x}</option>)}</select></label>
-      <label>Official HTTPS URL<input className="w-full rounded border p-2" type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} /></label>
-      <label>Allowed domains (comma separated)<input className="w-full rounded border p-2" value={form.allowed_domains} onChange={e => setForm({ ...form, allowed_domains: e.target.value })} placeholder="elevenlabs.io" /><span className="text-xs text-muted-foreground">HTTPS URLs are converted to hostnames; IP addresses are ignored.</span></label>
+      <label>Official HTTPS URL<input className="w-full rounded border p-2" type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://elevenlabs.io/text-to-speech" /><span className="text-xs text-muted-foreground">Use the exact product page for Official Website, or an official documentation page for Official Docs. The source fetches only this URL.</span></label>
+      <label>Allowed domains (comma separated)<input className="w-full rounded border p-2" value={form.allowed_domains} onChange={e => setForm({ ...form, allowed_domains: e.target.value })} placeholder="elevenlabs.io" /><span className="text-xs text-muted-foreground">Allow the URL hostname, such as elevenlabs.io. HTTPS URLs are converted to hostnames; IP addresses are ignored.</span></label>
       <label>Notes / manually approved facts<textarea className="w-full rounded border p-2" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></label>
       <label className="flex items-center gap-2"><input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} />Enabled</label>
       <div><button className="rounded bg-primary px-4 py-2 text-primary-foreground" type="submit">Save source</button></div>

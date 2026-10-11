@@ -17,7 +17,7 @@ class GenerateContentJob implements ShouldQueue
     public int $tries = 3;
     public int $timeout = 850;
     public function backoff(): array { return [30, 120, 300]; }
-    public function __construct(public int $contentId, public array $snapshot, public int $userId) { $this->onQueue('agent-revisions'); }
+    public function __construct(public int $contentId, public array $snapshot, public int $userId) { $this->onQueue('agent-generation'); }
     public function handle(RevisionAgent $agent, ReviewService $review): void
     {
         Cache::lock('agent-initial:'.$this->contentId, 900)->block(5, function () use ($agent, $review) {
@@ -40,7 +40,7 @@ class GenerateContentJob implements ShouldQueue
             }
             $checkpoint = $c->checkpoint ?? [];
             $c->update(['checkpoint' => [...$checkpoint, 'snapshot' => $snapshot]]);
-            $artifacts = $agent->produce($snapshot, $checkpoint['artifacts'] ?? [], ['voice', 'render'], $c->id, null, $checkpoint['completed'] ?? [], function ($assets, $completed) use ($c, $snapshot) { $c->update(['checkpoint' => ['snapshot' => $snapshot, 'artifacts' => $assets, 'completed' => $completed]]); });
+            $artifacts = $agent->produce($snapshot, $checkpoint['artifacts'] ?? [], ['voice', 'render'], $c->id, null, $checkpoint['completed'] ?? [], function ($assets, $completed) use ($c, &$snapshot) { $c->update(['checkpoint' => ['snapshot' => $snapshot, 'artifacts' => $assets, 'completed' => $completed]]); });
             $qa = app(ComplianceQaAgent::class)->check($snapshot, $artifacts);
             DB::transaction(function () use ($review, $artifacts, $qa, $snapshot) {
                 $c = Content::lockForUpdate()->findOrFail($this->contentId);

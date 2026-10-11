@@ -1,7 +1,7 @@
 export const platforms = ["pinterest", "instagram", "tiktok", "facebook", "youtube"] as const;
 export type Platform = typeof platforms[number];
 export const components = ["script", "scenes", "captions", "cta", "disclosure", "metadata", "voice", "video"] as const;
-export type Scene = { id: string; text: string; duration: number; media_id: number | null };
+export type Scene = { id: string; text: string; duration: number; media_id: number | null; purpose?: "hook" | "problem" | "benefit" | "demo" | "closing"; headline?: string; body?: string; visual_style?: "technology" | "nature" | "cinematic" | "product" | "abstract" | "minimal"; background_type?: "media" | "animated_abstract" | "solid_light" | "solid_dark"; animation?: "fade_up" | "slide_in" | "scale_in" | "masked_reveal" | "staggered"; layout?: "left" | "center" | "split"; template?: string };
 export type PlatformMetadata = { title: string; caption: string; description: string; hashtags: string[]; affiliate_url: string; cta: string; disclosure: string };
 export type Snapshot = { script: string; scenes: Scene[]; captions: string; cta: string; disclosure: string; voice: { voice_id: string | null }; metadata: Record<Platform, PlatformMetadata> };
 export type Version = { id: number; number: number; parent_version_id: number | null; restored_from_id: number | null; snapshot: Snapshot; snapshot_hash: string; assets: Record<"video" | "voice", { url: string; mock: boolean }>; changes: { component: string; before: unknown; after: unknown }[]; steps: string[]; qa: { passed: boolean; checks: Record<string, boolean>; duration: number; review_required: string }; references: { source_url: string | null; synced_at: string; facts: string }[]; mock: boolean; created_at: string };
