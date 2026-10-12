@@ -13,7 +13,9 @@ export async function agentPreferences() { return (await api.get<ApiResponse<Pre
 export async function savePreference(payload: PreferencePayload, id?: number) { return (await (id ? api.put(`${root}/preferences/${id}`, payload) : api.post(`${root}/preferences`, payload))).data.data; }
 export async function disablePreference(id: number) { await api.delete(`${root}/preferences/${id}`); }
 export async function agentMedia() { return (await api.get<ApiResponse<AgentMedia[]>>(`${root}/media`)).data.data; }
-export async function uploadAgentMedia(form: FormData) { return (await api.post(`${root}/media`, form, { headers: { "Content-Type": "multipart/form-data" } })).data.data; }
+export async function searchAgentMedia(search: string) { return (await api.get<ApiResponse<AgentMedia[]>>(`${root}/media`, { params: { search } })).data.data; }
+export async function uploadAgentMedia(form: FormData): Promise<AgentMedia> { return (await api.post<ApiResponse<AgentMedia>>(`${root}/media`, form, { headers: { "Content-Type": "multipart/form-data" } })).data.data; }
+export async function previewAgentMedia(id: number): Promise<Blob> { return (await api.get<Blob>(`${root}/media/${id}/preview`, { responseType: "blob" })).data; }
 export async function downloadMetadata(id: number, versionId: number, number: number) {
   const r = await api.get(`${root}/contents/${id}/export`, { params: { version_id: versionId }, responseType: "blob" });
   const url = URL.createObjectURL(r.data); const a = document.createElement("a"); a.href = url; a.download = `content-${id}-v${number}-metadata.json`; a.click(); URL.revokeObjectURL(url);

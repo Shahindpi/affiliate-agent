@@ -93,7 +93,9 @@ class AgentAutomationTest extends TestCase
         $source = Source::create(['brand_id' => $brand->id, 'name' => 'Official notes', 'type' => 'MANUAL', 'notes' => 'Verified voice synthesis feature.', 'enabled' => true]);
         app(SourceSyncService::class)->sync($source);
         app(SourceSyncService::class)->approve($source->documents()->first());
-        Media::create(['user_id' => $this->admin->id, 'name' => 'Screenshot', 'file_name' => 'test.png', 'disk' => 'local', 'path' => 'test.png', 'mime_type' => 'image/png', 'size' => 3, 'folder' => 'affiliate-agent']);
+        Storage::fake('local');
+        Storage::disk('local')->put('test.png', 'image fixture');
+        Media::create(['user_id' => $this->admin->id, 'name' => 'Voice computer technology screenshot', 'file_name' => 'test.png', 'disk' => 'local', 'path' => 'test.png', 'mime_type' => 'image/png', 'size' => 13, 'folder' => 'affiliate-agent']);
         $content = app(GenerationWorkflow::class)->launch(Setting::current(), $this->admin->id);
         $this->assertSame($product->id, $content->affiliate_product_id);
         $this->assertSame('GENERATING', $content->status);

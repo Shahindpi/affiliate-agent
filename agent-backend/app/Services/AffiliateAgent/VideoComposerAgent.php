@@ -24,15 +24,17 @@ class VideoComposerAgent
                 $voiceDuration = (float) (json_decode($probe->getOutput(), true)['format']['duration'] ?? 0);
                 if ($voiceDuration <= 0) throw new \RuntimeException('Could not determine the narration duration.');
                 if ($voiceDuration > 45) throw new \RuntimeException('Narration exceeds maximum 45-second video duration. Please shorten spoken script.');
+                $timingLocked = in_array('scenes', $locks, true) || collect($locks)->contains(fn ($lock) => str_starts_with($lock, 'scenes.'));
                 if ($voiceDuration > $duration) {
-                    if (in_array('scenes', $locks, true) || collect($locks)->contains(fn ($lock) => str_starts_with($lock, 'scenes.'))) {
-                        throw new \RuntimeException('Narration needs longer scenes, but scene timing is locked.');
-                    }
+                    if ($timingLocked) throw new \RuntimeException('Narration needs longer scenes, but scene timing is locked.');
                     $target = min(45, max($duration, $voiceDuration + 0.15));
+                    $count = count($snapshot['scenes']);
+                    $minimum = max(1, min(2.5, $target / $count * 0.65));
+                    $weights = array_map(fn ($scene) => max(1, count(preg_split('/\s+/u', trim($scene['text'])))), $snapshot['scenes']);
+                    $weightTotal = array_sum($weights);
                     $elapsed = 0;
-                    $last = count($snapshot['scenes']) - 1;
                     foreach ($snapshot['scenes'] as $i => &$scene) {
-                        $scene['duration'] = $i === $last ? round($target - $elapsed, 3) : round($scene['duration'] * $target / $duration, 3);
+                        $scene['duration'] = $i === $count - 1 ? round($target - $elapsed, 3) : round($minimum + ($target - $minimum * $count) * $weights[$i] / $weightTotal, 3);
                         $elapsed += $scene['duration'];
                     }
                     unset($scene);
@@ -40,6 +42,7 @@ class VideoComposerAgent
                 }
                 $command = [config('affiliate_agent.ffmpeg'), '-y'];
                 $filters = [];
+                $darkInk = [];
                 foreach ($snapshot['scenes'] as $index => $scene) {
                     $asset = $artifacts['scenes'][$scene['id']] ?? null;
                     $solid = in_array($scene['background_type'] ?? '', ['solid_light', 'solid_dark'], true);
@@ -53,38 +56,29 @@ class VideoComposerAgent
                         $this->gradient($background, $scene['visual_style'] ?? 'abstract', $index);
                         array_push($command, '-loop', '1', '-i', $background);
                     }
-                    $motion = $solid ? 'scale=1080:1920' : "scale=1200:2134:force_original_aspect_ratio=increase,crop=1080:1920:x='(in_w-out_w)/2+24*sin(n/60)':y='(in_h-out_h)/2+20*cos(n/75)'";
-                    $shade = $solid && $scene['background_type'] === 'solid_light' ? '' : ',drawbox=x=0:y=0:w=iw:h=ih:color=black@0.25:t=fill';
+                    $videoMedia = $asset && $asset['mime_type'] === 'video/mp4' && !$solid && ($scene['background_type'] ?? '') === 'media';
+                    $motion = $this->backgroundMotion($scene, $solid, $videoMedia);
+                    $demo = ($scene['purpose'] ?? '') === 'demo';
+                    $brightness = $asset && !$solid ? $this->brightness(app(AssetStore::class)->absolute($asset)) : null;
+                    $automatic = $brightness === null ? ($asset ? .38 : .18) : ($brightness > 160 ? .54 : ($brightness < 75 ? .18 : .34));
+                    $opacity = match ($scene['overlay_mode'] ?? 'auto') {
+                        'light' => .22, 'medium' => .38, 'strong' => .58, 'none' => 0.0, default => $automatic,
+                    };
+                    $darkInk[$scene['id']] = ($scene['background_type'] ?? '') === 'solid_light' || ($asset && !$solid && $brightness !== null && $brightness * (1 - $opacity) > 145);
+                    $shade = $solid || $opacity === 0.0 ? '' : ($demo ? ',drawbox=x=0:y=740:w=iw:h=900:color=black@'.min(.66, $opacity + .08).':t=fill' : ',drawbox=x=0:y=150:w=iw:h=1450:color=black@'.$opacity.':t=fill');
                     $filters[] = '['.$index.':v]'.$motion.',setsar=1,fps=30,trim=duration='.$scene['duration'].',setpts=PTS-STARTPTS'.$shade.'[v'.$index.']';
                 }
-                
                 $n = count($snapshot['scenes']);
-
                 array_push($command, '-i', $voice);
-
                 $captionsPath = $tmp.'/captions.ass';
-
                 file_put_contents(
                     $captionsPath,
-                    $this->subtitles(
-                        $snapshot,
-                        !empty($artifacts['voice']['mock'])
-                    )
+                    $this->subtitles($snapshot, !empty($artifacts['voice']['mock']), $darkInk)
                 );
-
-                $inputs = implode(
-                    '',
-                    array_map(fn ($i) => "[v$i]", range(0, $n - 1))
-                );
-
-                $captionFilterPath = $this->ffmpegFilterPath(
-                    basename($captionsPath)
-                );
-
+                $inputs = implode('', array_map(fn ($i) => "[v$i]", range(0, $n - 1)));
+                $captionFilterPath = $this->ffmpegFilterPath(basename($captionsPath));
                 $filters[] = "$inputs concat=n=$n:v=1:a=0,subtitles=filename='$captionFilterPath'[out]";
-
                 $filters[] = "[$n:a]apad,atrim=duration={$duration}[aout]";
-
                 array_push($command, '-filter_complex_threads', '1', '-filter_complex', implode(';', $filters), '-map', '[out]', '-map', '[aout]', '-t', (string) $duration, '-c:v', 'libx264', '-threads', '2', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', $tmp.'/master.mp4');
                 $p = new Process($command, $tmp);
                 $p->setTimeout(config('affiliate_agent.render_timeout'))->mustRun();
@@ -107,6 +101,33 @@ class VideoComposerAgent
         }
 
         return str_replace("'", "\\'", $path);
+    }
+
+    private function backgroundMotion(array $scene, bool $solid, bool $videoMedia): string
+    {
+        if ($solid) return 'scale=1080:1920';
+        $focus = $scene['media_focus'] ?? 'center';
+        $x = match ($focus) { 'left' => '0', 'right' => 'in_w-out_w', default => '(in_w-out_w)/2' };
+        $y = match ($focus) { 'top' => '0', 'bottom' => 'in_h-out_h', default => '(in_h-out_h)/2' };
+        if (($scene['media_fit'] ?? 'cover') === 'contain') {
+            $px = match ($focus) { 'left' => '0', 'right' => 'ow-iw', default => '(ow-iw)/2' };
+            $py = match ($focus) { 'top' => '0', 'bottom' => 'oh-ih', default => '(oh-ih)/2' };
+            return "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:x=$px:y=$py:color=0x111924";
+        }
+        if ($videoMedia) return "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:x='$x':y='$y'";
+        if (in_array($focus, ['center', 'top', 'bottom'], true)) $x .= '+24*sin(n/60)';
+        if (in_array($focus, ['center', 'left', 'right'], true)) $y .= '+20*cos(n/75)';
+        return "scale=1200:2134:force_original_aspect_ratio=increase,crop=1080:1920:x='$x':y='$y'";
+    }
+
+    private function brightness(string $path): ?float
+    {
+        try {
+            $probe = new Process([config('affiliate_agent.ffmpeg'), '-v', 'error', '-i', $path, '-vf', 'scale=1:1,format=rgb24', '-frames:v', '1', '-f', 'rawvideo', '-']);
+            $probe->setTimeout(15)->mustRun();
+            $pixel = $probe->getOutput();
+            return strlen($pixel) >= 3 ? .2126 * ord($pixel[0]) + .7152 * ord($pixel[1]) + .0722 * ord($pixel[2]) : null;
+        } catch (\Throwable) { return null; }
     }
 
     private function gradient(string $path, string $style, int $seed): void
@@ -134,12 +155,12 @@ class VideoComposerAgent
         } finally { fclose($file); }
     }
 
-    private function subtitles(array $snapshot, bool $mock): string
+    private function subtitles(array $snapshot, bool $mock, array $darkInk = []): string
     {
         $text = "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n";
         $text .= "Style: Captions,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,3,1,2,70,70,450,1\n";
-        $text .= "Style: Headline,DejaVu Sans,82,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,4,2,8,85,85,290,1\n";
-        $text .= "Style: Body,DejaVu Sans,47,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,0,0,0,0,100,100,0,0,1,3,1,8,95,95,550,1\n";
+        $text .= "Style: Headline,DejaVu Sans,86,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,4,2,8,95,95,290,1\n";
+        $text .= "Style: Body,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,0,0,0,0,100,100,0,0,1,3,1,8,95,95,550,1\n";
         $text .= "Style: CTA,DejaVu Sans,50,&H00FFFFFF,&H00FFFFFF,&H00335C64,&H00163348,1,0,0,0,100,100,0,0,3,4,1,2,190,190,320,1\n";
         $text .= "Style: Badge,DejaVu Sans,38,&H00FFFFFF,&H00FFFFFF,&H00335C64,&H00163348,1,0,0,0,100,100,0,0,3,3,1,8,190,190,155,1\n";
         $text .= "Style: Disclosure,DejaVu Sans,27,&H00FFFFFF,&H00FFFFFF,&H00102030,&H80102030,0,0,0,0,100,100,0,0,1,2,1,2,90,90,95,1\n";
@@ -151,37 +172,110 @@ class VideoComposerAgent
             $time = fn ($s) => sprintf('%d:%02d:%05.2f', floor($s / 3600), floor($s / 60) % 60, fmod($s, 60));
             return 'Dialogue: 0,'.$time($start).','.$time($end).",$style,,0,0,0,,".$effect.$value."\n";
         };
-        $chunks = array_chunk(preg_split('/\s+/u', trim($snapshot['captions'])), 6);
-        $part = $duration / max(1, count($chunks));
-        foreach ($chunks as $i => $words) $text .= $line($i * $part, ($i + 1) * $part, 'Captions', implode(' ', $words));
+        $captionWords = preg_split('/\s+/u', trim($snapshot['captions']));
+        $spokenWeights = array_map(fn ($scene) => max(1, count(preg_split('/\s+/u', trim($scene['text'])))), $snapshot['scenes']);
+        $remaining = count($captionWords); $totalWeight = array_sum($spokenWeights); $cursor = 0;
         $offset = 0; $lastIndex = count($snapshot['scenes']) - 1;
         foreach ($snapshot['scenes'] as $index => $scene) {
             $end = $offset + $scene['duration'];
+            $count = $index === $lastIndex ? $remaining : min($remaining, max(1, (int) round($remaining * $spokenWeights[$index] / max(1, $totalWeight))));
+            $words = array_slice($captionWords, $cursor, $count);
+            $chunks = array_chunk($words, 6);
+            foreach ($chunks as $partIndex => $chunk) {
+                $start = $offset + $scene['duration'] * $partIndex / count($chunks);
+                $stop = $offset + $scene['duration'] * ($partIndex + 1) / count($chunks);
+                $captionInk = ($darkInk[$scene['id']] ?? (($scene['background_type'] ?? '') === 'solid_light')) ? '{\\c&H002A2521&\\3c&H00F4F3EC&\\bord1\\shad0}' : '';
+                $text .= $line($start, $stop, 'Captions', implode(' ', $chunk), $captionInk);
+            }
+            $cursor += $count; $remaining -= $count; $totalWeight -= $spokenWeights[$index];
             $layout = $scene['layout'] ?? 'center';
+            $demo = ($scene['purpose'] ?? '') === 'demo';
             $x = $layout === 'center' ? 540 : 95;
             $align = $layout === 'center' ? 8 : 7;
-            $y = $layout === 'split' ? 380 : 290;
+            $y = $demo ? 850 : ($layout === 'split' ? 450 : 360 + ($index % 2) * 90);
             $animation = $scene['animation'] ?? 'fade_up';
-            $enter = match ($animation) {
-                'slide_in' => "\\move(".($x - 60).",$y,$x,$y,0,500)",
-                'scale_in' => '\\fscx90\\fscy90\\t(0,500,\\fscx100\\fscy100)',
-                'masked_reveal' => '\\blur3\\t(0,450,\\blur0)',
-                'staggered' => "\\move($x,".($y + 30).",$x,$y,0,500)",
-                default => "\\move($x,".($y + 28).",$x,$y,0,500)",
-            };
-            $ink = ($scene['background_type'] ?? '') === 'solid_light' ? '\\c&H002A2521&\\3c&H00F4F3EC&' : '';
-            $headline = mb_strimwidth($scene['headline'] ?? $scene['text'], 0, 55, '…');
-            $body = mb_strimwidth($scene['body'] ?? '', 0, 180, '…');
-            $effect = "{\\an$align$enter\\fad(280,200)$ink}";
-            $text .= $line($offset, $end, 'Headline', $headline, $effect);
-            if ($body !== '') $text .= $line(min($end - .1, $offset + .35), $end, 'Body', $body, "{\\an$align\\pos($x,".($y + 230).")\\fad(450,200)$ink}");
+            $ink = ($darkInk[$scene['id']] ?? (($scene['background_type'] ?? '') === 'solid_light')) ? '\\c&H002A2521&\\3c&H00F4F3EC&' : '';
+            $type = $this->typographyForScene($scene);
+            ['headline' => $headline, 'headline_size' => $headlineSize, 'headline_line_width' => $lineWidth,
+                'wrapped_headline' => $wrapped, 'body' => $body, 'body_size' => $bodySize] = $type;
+            $headlineStart = $offset + min(.2, $scene['duration'] * .06);
+            $headlineEnd = $offset + $scene['duration'] * .69;
+            $headlineEffect = "\\an$align\\fs$headlineSize".$this->entrance($animation, $x, $y)."\\fad(240,180)$ink";
+            if (in_array($animation, ['typewriter', 'cursor_reveal', 'word_stagger'], true) && mb_strlen($headline) <= 75) {
+                $pieces = $animation === 'word_stagger' ? preg_split('/\s+/u', $headline) : preg_split('//u', $headline, -1, PREG_SPLIT_NO_EMPTY);
+                $steps = min($animation === 'word_stagger' ? 8 : 16, count($pieces));
+                $reveal = min(1.8, $scene['duration'] * .38);
+                for ($j = 1; $j <= $steps; $j++) {
+                    $visible = (int) ceil(count($pieces) * $j / $steps);
+                    $fragment = $animation === 'word_stagger' ? implode(' ', array_slice($pieces, 0, $visible)) : implode('', array_slice($pieces, 0, $visible));
+                    $cursorGlyph = $animation === 'cursor_reveal' && $j < $steps && $j % 2 === 0 ? '_' : '';
+                    $text .= $line($headlineStart + ($j - 1) * $reveal / $steps, $j === $steps ? $headlineEnd : $headlineStart + $j * $reveal / $steps, 'Headline', $this->wrapOverlay($fragment.$cursorGlyph, $lineWidth, 3), "{\\an$align\\pos($x,$y)\\fs$headlineSize$ink}");
+                }
+            } else $text .= $line($headlineStart, $headlineEnd, 'Headline', $wrapped, '{'.$headlineEffect.'}');
+            if ($body !== '') {
+                $bodyY = $demo ? 1170 : $y + 260;
+                $text .= $line($offset + $scene['duration'] * .3, $offset + $scene['duration'] * .88, 'Body', $body, "{\\an$align\\pos($x,$bodyY)\\fs$bodySize\\fad(380,180)$ink}");
+            }
             $template = $scene['template'] ?? ($index === $lastIndex ? 'cta_button' : 'none');
             $label = app(SceneDesignAgent::class)->templateText($template, $snapshot['cta']);
-            if ($label !== '') $text .= $line($offset + min(.2, $scene['duration'] / 4), $end, in_array($template, ['product_title', 'feature_highlight', 'bullet_point', 'lower_third', 'tag_badge', 'powered_by_dewdora'], true) ? 'Badge' : 'CTA', $label, '{\\fad(500,250)\\fscx94\\fscy94\\t(0,450,\\fscx100\\fscy100)}');
+            if ($label !== '') {
+                $badge = in_array($template, ['product_title', 'feature_highlight', 'bullet_point', 'lower_third', 'tag_badge', 'powered_by_dewdora'], true);
+                $ctaY = $badge ? ($demo ? 1590 : 1150) : 1590;
+                $size = $badge ? 36 : (mb_strlen($label) > 28 ? 42 : 54);
+                $text .= $line($offset + $scene['duration'] * ($badge ? .58 : .72), $end, $badge ? 'Badge' : 'CTA', mb_strimwidth($label, 0, 54, '…'), "{\\an2\\pos(540,$ctaY)\\fs$size\\fad(350,180)\\fscx92\\fscy92\\t(0,400,\\fscx100\\fscy100)}");
+            }
             $offset = $end;
         }
         $text .= $line(0, $duration, 'Disclosure', $snapshot['disclosure']);
-        if ($mock) $text .= $line(0, $duration, 'Badge', 'MOCK PREVIEW — test tone, no narration');
+        if ($mock) $text .= $line(0, $duration, 'Badge', 'MOCK · no narration', '{\\an8\\pos(540,80)\\fs24}');
         return $text;
+    }
+
+    public function typographyForScene(array $scene): array
+    {
+        $headline = mb_strimwidth($scene['headline'] ?? $scene['text'], 0, 60, '…');
+        $length = mb_strlen($headline);
+        $headlineSize = $length <= 22 ? 90 : ($length <= 40 ? 86 : ($length <= 52 ? 82 : 78));
+        $lineWidth = match ($headlineSize) { 90 => 17, 86 => 18, 82 => 19, default => 20 };
+        $bodyText = mb_strimwidth($scene['body'] ?? '', 0, 100, '…');
+        $bodySize = mb_strlen($bodyText) <= 45 ? 48 : (mb_strlen($bodyText) <= 75 ? 45 : 42);
+        return [
+            'headline' => $headline,
+            'headline_size' => $headlineSize,
+            'headline_line_width' => $lineWidth,
+            'wrapped_headline' => $this->wrapOverlay($headline, $lineWidth, 3),
+            'body' => $this->wrapOverlay($bodyText, 32, 3),
+            'body_size' => $bodySize,
+        ];
+    }
+
+    private function wrapOverlay(string $value, int $limit, int $maxLines): string
+    {
+        $words = preg_split('/\s+/u', trim($value));
+        $lines = []; $current = '';
+        foreach ($words as $word) {
+            while (mb_strlen($word) > $limit) {
+                if ($current !== '') { $lines[] = $current; $current = ''; }
+                $lines[] = mb_substr($word, 0, $limit);
+                $word = mb_substr($word, $limit);
+            }
+            if (mb_strlen($current.' '.$word) > $limit && $current !== '') { $lines[] = $current; $current = ''; }
+            $current = trim($current.' '.$word);
+        }
+        if ($current !== '') $lines[] = $current;
+        if (count($lines) > $maxLines) $lines[$maxLines - 1] = rtrim(mb_substr($lines[$maxLines - 1], 0, $limit - 1)).'…';
+        return implode("\n", array_slice($lines, 0, $maxLines));
+    }
+
+    private function entrance(string $kind, int $x, int $y): string
+    {
+        return match ($kind) {
+            'slide_in', 'slide_left' => "\\move(".($x - 80).",$y,$x,$y,0,600)",
+            'slide_right' => "\\move(".($x + 80).",$y,$x,$y,0,600)",
+            'slide_up', 'fade_up', 'staggered' => "\\move($x,".($y + 45).",$x,$y,0,600)",
+            'scale_in', 'scale_pop' => "\\pos($x,$y)\\fscx82\\fscy82\\t(0,550,\\fscx100\\fscy100)",
+            'masked_reveal' => "\\pos($x,$y)\\blur5\\t(0,550,\\blur0)",
+            default => "\\pos($x,$y)",
+        };
     }
 }

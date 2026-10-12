@@ -16,13 +16,21 @@ class RevisionAgent
         $content = Content::findOrFail($feedback->content_id);
         $base = $content->versions()->findOrFail($feedback->base_version_id);
         if ($content->current_version_id !== $base->id || $content->locks !== $feedback->locks) throw ValidationException::withMessages(['version' => 'Content or locks changed while the revision was queued. Resubmit against the current version.']);
-        $patch = $feedback->patch ?? $this->provider->revise($base->snapshot, $feedback->feedback, $feedback->target, $feedback->locks, $content->id);
+        $adminPatch = $feedback->patch !== null;
+        $mediaRevision = app(SceneMediaRevision::class);
+        $patch = $feedback->patch ?? (config('affiliate_agent.provider') === 'mock' && $mediaRevision->hasIntent($feedback->feedback)
+            ? ['scenes' => $base->snapshot['scenes']]
+            : $this->provider->revise($base->snapshot, $feedback->feedback, $feedback->target, $feedback->locks, $content->id));
+        if (!$adminPatch && $mediaRevision->hasIntent($feedback->feedback) && !isset($patch['scenes'])) $patch['scenes'] = $base->snapshot['scenes'];
         if (!$patch || array_diff(array_keys($patch), array_diff(ContentSchema::COMPONENTS, ['video']))) throw ValidationException::withMessages(['patch' => 'Invalid revision components.']);
         if (isset($patch['scenes']) && is_array($patch['scenes'])) {
             $patch['scenes'] = app(SceneDesignAgent::class)->normalize($patch['scenes'], $base->snapshot['scenes']);
+            if (!$adminPatch) $patch['scenes'] = $mediaRevision->apply($base->snapshot['scenes'], $patch['scenes'], $feedback->feedback, false);
         }
         $feedback->update(['patch' => $patch]);
         $proposed = $this->schema->validate(array_replace($base->snapshot, $patch));
+        if ($adminPatch) $proposed['scenes'] = $mediaRevision->apply($base->snapshot['scenes'], $proposed['scenes'], $feedback->feedback, true);
+        $proposed = $this->schema->validate($proposed);
         // Enforce selected scope before allowing deterministic dependent steps.
         foreach ($this->planner->changes($base->snapshot, $proposed) as $change) {
             if ($feedback->target !== 'all' && $change['component'] !== $feedback->target && !str_starts_with($change['component'], $feedback->target.'.')) throw ValidationException::withMessages(['target' => 'The provider changed content outside the requested scope.']);
@@ -36,14 +44,14 @@ class RevisionAgent
                 $old = $before[$scene['id']] ?? null;
                 if ($old === $scene) continue;
                 $scene = app(SceneDesignAgent::class)->decorate([$scene], $content->id, $content->product?->name ?? $content->title)[0];
-                $reselect = $scene['background_type'] === 'media' || ($visualFeedback && $scene['background_type'] === 'animated_abstract'
-                    && ($old['background_type'] ?? null) === 'animated_abstract' && ($old['visual_style'] ?? null) !== $scene['visual_style']);
+                $reselect = ($scene['media_mode'] ?? 'auto') === 'auto' && ($scene['background_type'] === 'media' || ($visualFeedback && $scene['background_type'] === 'animated_abstract'
+                    && ($old['background_type'] ?? null) === 'animated_abstract' && ($old['visual_style'] ?? null) !== $scene['visual_style']));
                 if ($scene['media_id'] === null && $reselect) {
-                    $selected = app(MediaSelectionAgent::class)->select([$scene], $content->product?->name ?? '')[0];
+                    $selected = app(MediaSelectionAgent::class)->select([$scene], $content->product?->name ?? '', $content->brand?->name ?? '', true, $content->product?->category?->name ?? '')[0];
                     if ($selected['media_id'] !== null) {
                         $scene = $selected;
                         $scene['background_type'] = 'media';
-                    } elseif ($scene['background_type'] === 'media') $scene['background_type'] = 'animated_abstract';
+                    } elseif ($scene['background_type'] === 'media') $scene = $selected;
                 }
             }
             unset($scene);

@@ -11,6 +11,7 @@ use App\Models\Agent\Preference;
 use App\Models\Agent\Publication;
 use App\Models\AffiliateProduct;
 use App\Models\Brand;
+use App\Models\Media;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AffiliateAgent\AssetStore;
@@ -23,6 +24,8 @@ use App\Services\AffiliateAgent\ReviewService;
 use App\Services\AffiliateAgent\RevisionAgent;
 use App\Services\AffiliateAgent\RevisionPlanner;
 use App\Services\AffiliateAgent\SceneDesignAgent;
+use App\Services\AffiliateAgent\MediaSelectionAgent;
+use App\Services\AffiliateAgent\SceneMediaRevision;
 use App\Services\AffiliateAgent\VideoComposerAgent;
 use App\Services\AffiliateAgent\VoiceAgent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,6 +35,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Http\UploadedFile;
 use Laravel\Sanctum\Sanctum;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
@@ -104,6 +108,27 @@ class AgentReviewTest extends TestCase
         (new GenerateContentJob($id, app(ContentSchema::class)->validate($snapshot), $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
         $this->assertSame(['#pinterest'], $c->fresh()->currentVersion->snapshot['metadata']['pinterest']['hashtags']);
         $this->assertSame($product->affiliate_url, $c->fresh()->currentVersion->snapshot['metadata']['youtube']['affiliate_url']);
+    }
+
+    public function test_initial_generation_selects_matching_video_before_copy_and_render(): void
+    {
+        $snapshot = $this->snapshot();
+        $snapshot['scenes'][0] += ['purpose' => 'hook', 'visual_style' => 'technology', 'background_type' => 'media', 'headline' => 'Computer workflow'];
+        $snapshot['scenes'][1] += ['purpose' => 'demo', 'visual_style' => 'product', 'background_type' => 'media', 'headline' => 'Try the tool'];
+        Storage::disk('local')->put('media/computer.mp4', 'test video');
+        $media = Media::create(['name' => 'Computer technology screen footage', 'file_name' => 'computer.mp4', 'disk' => 'local', 'path' => 'media/computer.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $id = $this->postJson($this->root.'/contents', ['title' => 'Computer workflow', 'snapshot' => $snapshot])->assertCreated()->json('data.id');
+        $this->qa();
+        $voice = app(AssetStore::class)->put('audio', 'wav', 'audio/wav', true);
+        $video = app(AssetStore::class)->put('render', 'mp4', 'video/mp4', true);
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldReceive('generate')->andReturn($voice));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->andReturn($video));
+        (new GenerateContentJob($id, $snapshot, $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
+        $version = Content::findOrFail($id)->currentVersion;
+        $this->assertSame($media->id, $version->snapshot['scenes'][0]['media_id']);
+        $this->assertSame('video/mp4', $version->artifacts['scenes']['intro']['mime_type']);
+        $this->assertNull($version->snapshot['scenes'][1]['media_id']);
+        $this->assertSame('animated_abstract', $version->snapshot['scenes'][1]['background_type']);
     }
 
     public function test_content_listing_accepts_absent_and_empty_search_parameters(): void
@@ -402,11 +427,11 @@ class AgentReviewTest extends TestCase
         $this->assertSame(['render', 'qa'], $plan['steps']);
         $this->assertSame('scenes.intro', $plan['changes'][0]['component']);
         $ass = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke(app(VideoComposerAgent::class), $revised, false);
-        $this->assertStringContainsString('Style: Headline,DejaVu Sans,82', $ass);
-        $this->assertStringContainsString('Style: Body,DejaVu Sans,47', $ass);
+        $this->assertStringContainsString('Style: Headline,DejaVu Sans,86', $ass);
+        $this->assertStringContainsString('Style: Body,DejaVu Sans,48', $ass);
         $this->assertStringContainsString('Style: CTA,DejaVu Sans,50', $ass);
-        $this->assertStringContainsString('A clear product headline', $ass);
-        $this->assertStringContainsString('A smaller supporting line', $ass);
+        $this->assertStringContainsString('A clear product headline', str_replace('\\N', ' ', $ass));
+        $this->assertStringContainsString('A smaller supporting line', str_replace('\\N', ' ', $ass));
         $this->assertStringContainsString('Link in bio', $ass);
         try { app(RevisionPlanner::class)->plan($original, $revised, ['video']); $this->fail('Locked video must block a scene render.'); }
         catch (\Illuminate\Validation\ValidationException) { /* Expected. */ }
@@ -478,6 +503,7 @@ class AgentReviewTest extends TestCase
         $this->assertSame('REVIEW_PENDING', $c->fresh()->status);
         $this->assertSame(2, $c->versions()->count());
         $this->assertGreaterThan(16, array_sum(array_column($v->snapshot['scenes'], 'duration')));
+        $this->assertGreaterThan($v->snapshot['scenes'][1]['duration'], $v->snapshot['scenes'][0]['duration']);
         $this->assertTrue($v->qa['passed']);
         $this->assertTrue(app(AssetStore::class)->verify($v->artifacts['video']));
         $this->assertNotSame($base->artifacts['video']['sha256'], $v->artifacts['video']['sha256']);
@@ -501,5 +527,386 @@ class AgentReviewTest extends TestCase
             $this->expectExceptionMessage('Narration exceeds maximum 45-second video duration. Please shorten spoken script.');
             $composer->render($snapshot, $artifacts, $c->id);
         } finally { @unlink($tmp); }
+    }
+
+    public function test_scene_animations_typography_contrast_and_cta_timing_are_structured(): void
+    {
+        $snapshot = $this->snapshot();
+        $snapshot['scenes'] = app(SceneDesignAgent::class)->decorate($snapshot['scenes'], 4);
+        $this->assertNotSame($snapshot['scenes'][0]['animation'], $snapshot['scenes'][1]['animation']);
+        $snapshot['scenes'][0]['animation'] = 'cursor_reveal';
+        $snapshot['scenes'][0]['headline'] = 'Create natural AI speech';
+        $snapshot['scenes'][0]['body'] = 'Readable supporting line';
+        $snapshot['scenes'][0]['background_type'] = 'solid_light';
+        $snapshot['scenes'][1]['animation'] = 'slide_right';
+        $snapshot['scenes'][1]['template'] = 'cta_button';
+        $ass = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke(app(VideoComposerAgent::class), app(ContentSchema::class)->validate($snapshot), false);
+        $this->assertStringContainsString('\\c&H002A2521&', $ass);
+        $this->assertStringContainsString('Create natural AI speech', str_replace(['\\N', '_'], [' ', ''], $ass));
+        $this->assertMatchesRegularExpression('/Dialogue: 0,[^\n]+Create natural AI[^\n]*_/', $ass);
+        $this->assertStringContainsString('\\fs', $ass);
+        $this->assertStringContainsString('\\pos(540,1590)', $ass);
+        $this->assertStringContainsString('\\move(', $ass);
+        $short = $snapshot; $long = $snapshot;
+        $short['scenes'][0]['animation'] = 'fade_up'; $short['scenes'][0]['headline'] = 'Quick idea';
+        $long['scenes'][0]['animation'] = 'fade_up'; $long['scenes'][0]['headline'] = str_repeat('Helpful product details ', 4);
+        $shortAss = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke(app(VideoComposerAgent::class), $short, false);
+        $longAss = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke(app(VideoComposerAgent::class), $long, false);
+        preg_match('/Dialogue:[^\n]+Headline[^\n]*\\\\fs(\d+)/', $shortAss, $shortSize);
+        preg_match('/Dialogue:[^\n]+Headline[^\n]*\\\\fs(\d+)/', $longAss, $longSize);
+        $this->assertGreaterThan((int) $longSize[1], (int) $shortSize[1]);
+        $snapshot['scenes'][0]['animation'] = 'not-an-animation';
+        try { app(ContentSchema::class)->validate($snapshot); $this->fail('Invalid animation must fail.'); }
+        catch (\Illuminate\Validation\ValidationException) { /* Expected. */ }
+    }
+
+    public function test_media_selection_prefers_relevant_assets_preserves_manual_choices_and_falls_back(): void
+    {
+        Storage::disk('local')->put('media/forest.mp4', 'forest video');
+        Storage::disk('local')->put('media/screen.png', 'screen image');
+        $forest = Media::create(['name' => 'Forest nature outdoor footage', 'file_name' => 'forest.mp4', 'disk' => 'local', 'path' => 'media/forest.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $screen = Media::create(['name' => 'Tool demo interface screenshot', 'file_name' => 'screen.png', 'disk' => 'local', 'path' => 'media/screen.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $scenes = [
+            ['id' => 'forest', 'purpose' => 'benefit', 'text' => 'Explore the forest', 'headline' => 'Nature', 'visual_style' => 'nature', 'media_id' => null],
+            ['id' => 'demo', 'purpose' => 'demo', 'text' => 'Open the tool interface', 'visual_style' => 'product', 'media_id' => null],
+            ['id' => 'manual', 'purpose' => 'hook', 'text' => 'Keep this choice', 'visual_style' => 'nature', 'media_id' => $screen->id],
+        ];
+        $chosen = app(MediaSelectionAgent::class)->select($scenes, 'Tool');
+        $this->assertSame($forest->id, $chosen[0]['media_id']);
+        $this->assertSame($screen->id, $chosen[1]['media_id']);
+        $this->assertSame($screen->id, $chosen[2]['media_id']);
+        Storage::disk('local')->delete(['media/forest.mp4', 'media/screen.png']);
+        $fallback = app(MediaSelectionAgent::class)->select([$scenes[0]], 'Tool');
+        $this->assertNull($fallback[0]['media_id']);
+        $this->assertSame('animated_abstract', $fallback[0]['background_type']);
+    }
+
+    public function test_media_selection_prefers_matching_video_over_newer_image_and_rejects_unrelated_video(): void
+    {
+        foreach (['forest.mp4', 'forest.png', 'computer.mp4', 'unrelated.mp4'] as $file) Storage::disk('local')->put('media/'.$file, 'asset');
+        $forest = Media::create(['name' => 'Forest nature outdoor footage', 'file_name' => 'forest.mp4', 'disk' => 'local', 'path' => 'media/forest.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        Media::create(['name' => 'Forest nature outdoor still', 'file_name' => 'forest.png', 'disk' => 'local', 'path' => 'media/forest.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $computer = Media::create(['name' => 'Computer technology screen footage', 'file_name' => 'computer.mp4', 'disk' => 'local', 'path' => 'media/computer.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        Media::create(['name' => 'Unrelated sports video', 'file_name' => 'unrelated.mp4', 'disk' => 'local', 'path' => 'media/unrelated.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $scenes = [
+            ['id' => 'nature', 'purpose' => 'benefit', 'text' => 'Enjoy a walk outside', 'headline' => 'Nature awaits', 'visual_style' => 'nature', 'background_type' => 'media', 'media_id' => null],
+            ['id' => 'technology', 'purpose' => 'hook', 'text' => 'Work on your computer', 'headline' => 'Digital workflow', 'visual_style' => 'technology', 'background_type' => 'media', 'media_id' => null],
+            ['id' => 'manual', 'purpose' => 'demo', 'text' => 'Keep selected video', 'visual_style' => 'product', 'background_type' => 'media', 'media_id' => $forest->id],
+            ['id' => 'fallback', 'purpose' => 'benefit', 'text' => 'Fresh cooking recipes', 'visual_style' => 'minimal', 'background_type' => 'media', 'media_id' => null],
+        ];
+        $chosen = app(MediaSelectionAgent::class)->select($scenes);
+        $this->assertSame($forest->id, $chosen[0]['media_id']);
+        $this->assertSame($computer->id, $chosen[1]['media_id']);
+        $this->assertSame($forest->id, $chosen[2]['media_id']);
+        $this->assertNull($chosen[3]['media_id']);
+        $this->assertSame('animated_abstract', $chosen[3]['background_type']);
+        $scenes[0]['background_type'] = 'animated_abstract';
+        $this->assertSame('animated_abstract', app(MediaSelectionAgent::class)->select([$scenes[0]])[0]['background_type']);
+    }
+
+    public function test_hosting_category_selects_relevant_cloud_video_without_reusing_unrelated_footage(): void
+    {
+        Storage::disk('local')->put('media/cloud.mp4', 'cloud footage');
+        Storage::disk('local')->put('media/forest.mp4', 'forest footage');
+        $cloud = Media::create(['name' => 'Cloud datacenter server video', 'file_name' => 'cloud.mp4', 'disk' => 'local', 'path' => 'media/cloud.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        Media::create(['name' => 'Forest walking video', 'file_name' => 'forest.mp4', 'disk' => 'local', 'path' => 'media/forest.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $scenes = [['id' => 'hosting', 'text' => 'Launch your site', 'headline' => 'Go online', 'purpose' => 'benefit', 'visual_style' => 'technology', 'background_type' => 'media', 'media_id' => null]];
+        $selected = app(MediaSelectionAgent::class)->select($scenes, 'Web plan', '', false, 'Web Hosting');
+        $this->assertSame($cloud->id, $selected[0]['media_id']);
+        $this->assertSame('video', $selected[0]['media_type']);
+    }
+
+    public function test_mobile_typography_keeps_headlines_dominant_and_bounded(): void
+    {
+        $composer = app(VideoComposerAgent::class);
+        $short = $composer->typographyForScene(['headline' => 'Make it happen', 'body' => 'A useful supporting line']);
+        $long = $composer->typographyForScene(['headline' => str_repeat('A longer product headline ', 5), 'body' => str_repeat('Clearly readable product details ', 5)]);
+        $this->assertSame(90, $short['headline_size']);
+        $this->assertSame(48, $short['body_size']);
+        $this->assertSame(78, $long['headline_size']);
+        $this->assertSame(42, $long['body_size']);
+        foreach ([$short, $long] as $type) {
+            $this->assertGreaterThan($type['body_size'], $type['headline_size']);
+            $this->assertLessThanOrEqual(3, count(explode("\n", $type['wrapped_headline'])));
+            foreach (explode("\n", $type['wrapped_headline']) as $line) $this->assertLessThanOrEqual($type['headline_line_width'], mb_strlen($line));
+            foreach (explode("\n", $type['body']) as $line) $this->assertLessThanOrEqual(32, mb_strlen($line));
+        }
+    }
+
+    public function test_uploaded_video_and_existing_image_create_immutable_media_versions_and_restore(): void
+    {
+        $this->qa(); $content = $this->content(); $original = $content->currentVersion;
+        $upload = $this->post($this->root.'/media', ['name' => 'Hook product recording', 'file' => UploadedFile::fake()->create('hook.mp4', 8, 'video/mp4')], ['Accept' => 'application/json'])->assertCreated()->json('data');
+        $this->assertSame('video/mp4', $upload['mime_type']);
+        $this->get($this->root.'/media/'.$upload['id'].'/preview')->assertOk()->assertHeader('Content-Type', 'video/mp4');
+        Storage::disk('local')->put('media/demo.png', 'demo screenshot');
+        $image = Media::create(['name' => 'Product demo interface', 'file_name' => 'demo.png', 'disk' => 'local', 'path' => 'media/demo.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $scenes = $original->snapshot['scenes'];
+        $scenes[0] += ['media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'video', 'media_fit' => 'cover', 'media_focus' => 'top', 'overlay_mode' => 'auto', 'media_origin' => 'uploaded', 'background_type' => 'media'];
+        $scenes[0]['media_id'] = $upload['id'];
+        $scenes[1] += ['media_mode' => 'manual', 'media_locked' => false, 'media_type' => 'image', 'media_fit' => 'contain', 'media_focus' => 'right', 'overlay_mode' => 'medium', 'media_origin' => 'manual', 'background_type' => 'media'];
+        $scenes[1]['media_id'] = $image->id;
+        $video = app(AssetStore::class)->put('rendered revision', 'mp4', 'video/mp4', true);
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldNotReceive('generate'));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andReturn($video));
+        $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $original->id, 'feedback' => 'Admin selected a hook video and demo image.', 'target' => 'scenes', 'patch' => ['scenes' => $scenes]])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $version = $content->fresh()->currentVersion;
+        $this->assertSame($upload['id'], $version->snapshot['scenes'][0]['media_id']);
+        $this->assertSame('uploaded', $version->snapshot['scenes'][0]['media_origin']);
+        $this->assertSame('video/mp4', $version->artifacts['scenes']['intro']['mime_type']);
+        $this->assertSame($image->id, $version->snapshot['scenes'][1]['media_id']);
+        $this->assertSame('image/png', $version->artifacts['scenes']['demo']['mime_type']);
+        $this->assertSame('manual', $version->snapshot['scenes'][1]['media_origin']);
+        $this->assertSame($original->snapshot, $original->fresh()->snapshot);
+        $this->assertSame('scenes.intro', $version->changes[0]['component']);
+        $this->assertNull($version->changes[0]['before']['media_id']);
+        $this->assertSame($upload['id'], $version->changes[0]['after']['media_id']);
+
+        $meta = $version->snapshot['metadata']; $meta['youtube']['title'] = 'Updated title';
+        $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $version->id, 'feedback' => 'Update YouTube title only.', 'target' => 'metadata.youtube', 'patch' => ['metadata' => $meta]])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $this->assertSame($version->snapshot['scenes'], $content->fresh()->currentVersion->snapshot['scenes']);
+
+        $blocked = $content->fresh()->currentVersion->snapshot['scenes']; $blocked[0]['media_id'] = $image->id;
+        $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $content->fresh()->current_version_id, 'feedback' => 'Replace locked hook media.', 'target' => 'scenes', 'patch' => ['scenes' => $blocked]])->assertUnprocessable();
+        $this->postJson($this->root.'/contents/'.$content->id.'/restore', ['expected_version_id' => $content->fresh()->current_version_id, 'source_version_id' => $version->id])->assertOk();
+        $this->assertSame($version->snapshot['scenes'], $content->fresh()->currentVersion->snapshot['scenes']);
+        $this->assertSame($version->id, $content->fresh()->currentVersion->restored_from_id);
+    }
+
+    public function test_natural_media_feedback_selects_relevant_video_and_falls_back_without_a_match(): void
+    {
+        $this->qa(); $content = $this->content();
+        Storage::disk('local')->put('media/forest.mp4', 'nature footage');
+        $forest = Media::create(['name' => 'Nature forest outdoor walk footage', 'file_name' => 'forest.mp4', 'disk' => 'local', 'path' => 'media/forest.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $video = app(AssetStore::class)->put('rendered', 'mp4', 'video/mp4', true);
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldNotReceive('generate'));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->twice()->andReturn($video));
+        $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $content->current_version_id, 'feedback' => 'Use a nature video for scene 2.', 'target' => 'scenes.demo'])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $scene = $content->fresh()->currentVersion->snapshot['scenes'][1];
+        $this->assertSame($forest->id, $scene['media_id']);
+        $this->assertSame('auto', $scene['media_mode']);
+        $this->assertSame('video', $scene['media_type']);
+        $this->assertSame('auto', $scene['media_origin']);
+        $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $content->fresh()->current_version_id, 'feedback' => 'Replace scene 1 background with a technology video.', 'target' => 'scenes.intro'])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $first = $content->fresh()->currentVersion->snapshot['scenes'][0];
+        $this->assertNull($first['media_id']);
+        $this->assertSame('fallback', $first['media_origin']);
+        $this->assertSame('animated_abstract', $first['background_type']);
+        $this->assertSame($forest->id, $content->fresh()->currentVersion->snapshot['scenes'][1]['media_id']);
+    }
+
+    public function test_provider_patch_cannot_silently_replace_locked_manual_media(): void
+    {
+        $this->qa(); $content = $this->content();
+        Storage::disk('local')->put('media/manual.png', 'selected image');
+        $media = Media::create(['name' => 'Manual product image', 'file_name' => 'manual.png', 'disk' => 'local', 'path' => 'media/manual.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $snapshot = $content->currentVersion->snapshot;
+        $snapshot['scenes'][0] = [...$snapshot['scenes'][0], 'media_id' => $media->id, 'media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'image', 'media_origin' => 'manual', 'background_type' => 'media'];
+        $artifacts = $content->currentVersion->artifacts;
+        $artifacts['scenes']['intro'] = app(AssetStore::class)->copyMedia($media->id);
+        $base = app(ReviewService::class)->append($content, ['snapshot' => $snapshot, 'artifacts' => $artifacts, 'changes' => [], 'steps' => ['render', 'qa'], 'qa' => ['passed' => true]], $this->admin->id);
+        $tampered = $snapshot['scenes'];
+        $tampered[0]['headline'] = 'A concise headline';
+        $tampered[0]['media_id'] = null;
+        $tampered[0]['background_type'] = 'animated_abstract';
+        $this->mock(AIProviderInterface::class, fn ($m) => $m->shouldReceive('revise')->once()->andReturn(['scenes' => $tampered]));
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldNotReceive('generate'));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andReturn(app(AssetStore::class)->put('new video', 'mp4', 'video/mp4', true)));
+        $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $base->id, 'feedback' => 'Make the opening headline concise.', 'target' => 'scenes.intro'])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $revised = $content->fresh()->currentVersion->snapshot['scenes'][0];
+        $this->assertSame($media->id, $revised['media_id']);
+        $this->assertSame('manual', $revised['media_mode']);
+        $this->assertTrue($revised['media_locked']);
+        $this->assertSame('A concise headline', $revised['headline']);
+    }
+
+    public function test_keep_and_do_not_change_media_feedback_are_explicit_locks(): void
+    {
+        $policy = app(SceneMediaRevision::class);
+        $scenes = [
+            ['id' => 'hook', 'media_id' => 42, 'media_mode' => 'manual', 'background_type' => 'media'],
+            ['id' => 'closing', 'media_id' => null, 'media_mode' => 'auto', 'background_type' => 'animated_abstract'],
+        ];
+        $tampered = $scenes; $tampered[0]['media_id'] = null;
+        $kept = $policy->apply($scenes, $tampered, 'Keep the current video in scene 1.', false);
+        $this->assertSame(42, $kept[0]['media_id']);
+        $this->assertTrue($kept[0]['media_locked']);
+        $all = $policy->apply($scenes, $tampered, 'Do not change any background media.', false);
+        $this->assertSame(42, $all[0]['media_id']);
+        $this->assertTrue($all[0]['media_locked']);
+        $this->assertTrue($all[1]['media_locked']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $policy->apply($scenes, $scenes, 'Use the uploaded video as the background for the hook.', false);
+    }
+
+    public function test_media_fit_focus_overlay_and_cross_platform_ffmpeg_paths(): void
+    {
+        $composer = app(VideoComposerAgent::class);
+        $motion = new \ReflectionMethod(VideoComposerAgent::class, 'backgroundMotion');
+        $this->assertStringContainsString('crop=1080:1920', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'top'], false, true));
+        $this->assertStringContainsString("y='0'", $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'top'], false, true));
+        $this->assertStringContainsString('pad=1080:1920', $motion->invoke($composer, ['media_fit' => 'contain', 'media_focus' => 'right'], false, false));
+        $this->assertStringContainsString('sin(n/60)', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'center'], false, false));
+        $snapshot = app(ContentSchema::class)->validate($this->snapshot());
+        $ass = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke($composer, $snapshot, false, ['intro' => true]);
+        $this->assertStringContainsString('\\c&H002A2521&', $ass);
+        $filterPath = new \ReflectionMethod(VideoComposerAgent::class, 'ffmpegFilterPath');
+        $this->assertSame('captions.ass', $filterPath->invoke($composer, 'captions.ass'));
+        $this->assertStringContainsString('C\\\\:', $filterPath->invoke($composer, 'C:\\temp\\captions.ass'));
+        $this->assertStringContainsString('/tmp/captions.ass', $filterPath->invoke($composer, '/tmp/captions.ass'));
+    }
+
+    public function test_real_renderer_consumes_video_and_image_scene_assets(): void
+    {
+        $content = Content::create(['title' => 'Mixed media render', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
+        $tmp = sys_get_temp_dir().'/agent-mixed-'.bin2hex(random_bytes(8));
+        mkdir($tmp);
+        try {
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=15', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', $tmp.'/clip.mp4']))->mustRun();
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'color=c=white:s=500x500', '-frames:v', '1', $tmp.'/still.png']))->mustRun();
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:sample_rate=44100', '-t', '15', $tmp.'/voice.wav']))->mustRun();
+            $video = app(AssetStore::class)->put(file_get_contents($tmp.'/clip.mp4'), 'mp4', 'video/mp4');
+            $image = app(AssetStore::class)->put(file_get_contents($tmp.'/still.png'), 'png', 'image/png');
+            $voice = app(AssetStore::class)->put(file_get_contents($tmp.'/voice.wav'), 'wav', 'audio/wav', true);
+            $snapshot = $this->snapshot();
+            $snapshot['scenes'] = app(SceneDesignAgent::class)->decorate($snapshot['scenes'], $content->id);
+            $snapshot['scenes'][0] = [...$snapshot['scenes'][0], 'media_id' => 1, 'background_type' => 'media', 'media_mode' => 'manual', 'media_type' => 'video', 'media_fit' => 'cover', 'media_focus' => 'top', 'overlay_mode' => 'strong'];
+            $snapshot['scenes'][1] = [...$snapshot['scenes'][1], 'media_id' => 2, 'background_type' => 'media', 'media_mode' => 'manual', 'media_type' => 'image', 'media_fit' => 'contain', 'media_focus' => 'right', 'overlay_mode' => 'none'];
+            $snapshot['scenes'][0]['duration'] = 7.5; $snapshot['scenes'][1]['duration'] = 7.5;
+            $render = app(VideoComposerAgent::class)->render($snapshot, ['voice' => $voice, 'scenes' => ['intro' => $video, 'demo' => $image]], $content->id, ['scenes']);
+            $this->assertTrue(app(AssetStore::class)->verify($render));
+            $probe = new Process([config('affiliate_agent.ffprobe'), '-v', 'error', '-show_entries', 'stream=codec_name,width,height', '-of', 'json', app(AssetStore::class)->absolute($render)]);
+            $probe->mustRun();
+            $streams = json_decode($probe->getOutput(), true)['streams'];
+            $this->assertSame(1080, $streams[0]['width']);
+            $this->assertSame(1920, $streams[0]['height']);
+            $this->assertSame('h264', $streams[0]['codec_name']);
+        } finally {
+            foreach (glob($tmp.'/*') ?: [] as $file) @unlink($file);
+            @rmdir($tmp);
+        }
+    }
+
+    public function test_uploaded_image_video_and_auto_scene_complete_real_revision_and_mp4(): void
+    {
+        $tmp = sys_get_temp_dir().'/agent-upload-flow-'.bin2hex(random_bytes(8));
+        mkdir($tmp);
+        try {
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'color=c=skyblue:s=480x640', '-frames:v', '1', $tmp.'/hook.png']))->mustRun();
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=15', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', $tmp.'/demo.mp4']))->mustRun();
+            (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'color=c=navy:s=480x640', '-frames:v', '1', $tmp.'/closing.png']))->mustRun();
+            $spokenPreview = getenv('AFFILIATE_AGENT_SPOKEN_PREVIEW') === '1';
+            if ($spokenPreview) {
+                foreach (['See the product', 'Watch the workflow', 'Explore cloud hosting'] as $i => $spoken) {
+                    (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'flite=text='.$spoken.':voice=slt', '-af', 'apad', '-t', '5', $tmp.'/spoken-'.$i.'.wav']))->mustRun();
+                }
+                (new Process([config('affiliate_agent.ffmpeg'), '-y', '-i', $tmp.'/spoken-0.wav', '-i', $tmp.'/spoken-1.wav', '-i', $tmp.'/spoken-2.wav', '-filter_complex', '[0:a][1:a][2:a]concat=n=3:v=0:a=1[a]', '-map', '[a]', $tmp.'/voice.wav']))->mustRun();
+            } else (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:sample_rate=44100', '-t', '15', $tmp.'/voice.wav']))->mustRun();
+            $content = Content::create(['title' => 'Mixed upload review', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
+            $snapshot = $this->snapshot();
+            $snapshot['scenes'] = [
+                ['id' => 'hook', 'text' => 'See the product', 'duration' => 5, 'media_id' => null, 'purpose' => 'hook', 'headline' => 'See the product', 'body' => 'A clear introduction', 'visual_style' => 'nature', 'background_type' => 'animated_abstract', 'animation' => 'cursor_reveal'],
+                ['id' => 'demo', 'text' => 'Watch the workflow', 'duration' => 5, 'media_id' => null, 'purpose' => 'demo', 'headline' => 'Watch the workflow', 'body' => 'A practical example', 'visual_style' => 'product', 'background_type' => 'animated_abstract', 'animation' => 'slide_up'],
+                ['id' => 'closing', 'text' => 'Explore cloud hosting', 'duration' => 5, 'media_id' => null, 'purpose' => 'closing', 'headline' => 'Explore cloud hosting', 'body' => 'Visit the product page', 'visual_style' => 'technology', 'background_type' => 'animated_abstract', 'animation' => 'scale_pop'],
+            ];
+            $snapshot['script'] = VoiceAgent::narration($snapshot);
+            $snapshot['captions'] = $snapshot['script'];
+            $voice = app(AssetStore::class)->put(file_get_contents($tmp.'/voice.wav'), 'wav', 'audio/wav', !$spokenPreview);
+            $base = app(ReviewService::class)->append($content, ['snapshot' => $snapshot, 'artifacts' => ['voice' => $voice, 'video' => app(AssetStore::class)->put('initial placeholder', 'mp4', 'video/mp4', true), 'scenes' => []], 'steps' => ['voice', 'render', 'qa'], 'changes' => [], 'qa' => ['passed' => true]], $this->admin->id);
+            $image = $this->post($this->root.'/media', ['name' => 'Uploaded hook image', 'file' => new UploadedFile($tmp.'/hook.png', 'hook.png', 'image/png', null, true)], ['Accept' => 'application/json'])->assertCreated()->json('data');
+            $video = $this->post($this->root.'/media', ['name' => 'Uploaded product demo video', 'file' => new UploadedFile($tmp.'/demo.mp4', 'demo.mp4', 'video/mp4', null, true)], ['Accept' => 'application/json'])->assertCreated()->json('data');
+            Storage::disk('local')->put('media/closing.png', file_get_contents($tmp.'/closing.png'));
+            $automatic = Media::create(['name' => 'Cloud hosting technology server outro', 'file_name' => 'closing.png', 'disk' => 'local', 'path' => 'media/closing.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+            $this->get($this->root.'/media/'.$image['id'].'/preview')->assertOk()->assertHeader('Content-Type', 'image/png');
+            $this->get($this->root.'/media/'.$video['id'].'/preview')->assertOk()->assertHeader('Content-Type', 'video/mp4');
+            $scenes = $snapshot['scenes'];
+            $scenes[0] = [...$scenes[0], 'media_id' => $image['id'], 'media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'image', 'media_origin' => 'uploaded', 'media_fit' => 'contain', 'media_focus' => 'top', 'overlay_mode' => 'strong', 'background_type' => 'media'];
+            $scenes[1] = [...$scenes[1], 'media_id' => $video['id'], 'media_mode' => 'manual', 'media_locked' => false, 'media_type' => 'video', 'media_origin' => 'uploaded', 'media_fit' => 'cover', 'media_focus' => 'center', 'overlay_mode' => 'auto', 'background_type' => 'media'];
+            $scenes[2] = [...$scenes[2], 'media_mode' => 'auto', 'background_type' => 'media'];
+            $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $base->id, 'feedback' => 'Use uploaded image and video; find a relevant closing background.', 'target' => 'scenes', 'patch' => ['scenes' => $scenes]])->assertAccepted()->json('data.id');
+            $this->execute($id);
+            $this->assertSame('COMPLETED', Feedback::findOrFail($id)->status);
+            $version = $content->fresh()->currentVersion;
+            $this->assertTrue($version->qa['passed']);
+            $this->assertSame($image['id'], $version->snapshot['scenes'][0]['media_id']);
+            $this->assertTrue($version->snapshot['scenes'][0]['media_locked']);
+            $this->assertSame($video['id'], $version->snapshot['scenes'][1]['media_id']);
+            $this->assertSame($automatic->id, $version->snapshot['scenes'][2]['media_id']);
+            $this->assertSame('auto', $version->snapshot['scenes'][2]['media_origin']);
+            $this->assertSame($snapshot['script'], $version->snapshot['script']);
+            $this->assertSame($voice, $version->artifacts['voice']);
+            $this->assertSame(['render', 'qa'], $version->steps);
+            $file = app(AssetStore::class)->absolute($version->artifacts['video']);
+            $probe = new Process([config('affiliate_agent.ffprobe'), '-v', 'error', '-show_entries', 'format=duration:stream=codec_name,width,height', '-of', 'json', $file]);
+            $probe->mustRun();
+            $data = json_decode($probe->getOutput(), true);
+            $this->assertSame(1080, $data['streams'][0]['width']);
+            $this->assertSame(1920, $data['streams'][0]['height']);
+            $this->assertLessThanOrEqual(45, (float) $data['format']['duration']);
+            if ($output = getenv('AFFILIATE_AGENT_PREVIEW_OUTPUT')) copy($file, $output);
+        } finally {
+            foreach (glob($tmp.'/*') ?: [] as $path) @unlink($path);
+            @rmdir($tmp);
+        }
+    }
+
+    public function test_voice_narration_uses_scene_order_and_script_edit_aligns_scene_lines(): void
+    {
+        $snapshot = $this->snapshot();
+        $this->assertSame('Turn text into a voice Paste text and generate', VoiceAgent::narration($snapshot));
+        $after = [...$snapshot, 'script' => 'First idea. Second explanation. Last action.'];
+        $plan = app(RevisionPlanner::class)->plan($snapshot, $after, []);
+        $this->assertSame($after['script'], VoiceAgent::narration($plan['snapshot']));
+        $this->assertSame($after['script'], $plan['snapshot']['captions']);
+        $this->assertSame(['voice', 'render', 'qa'], $plan['steps']);
+    }
+
+    public function test_visual_revision_reselects_only_changed_scene_and_preserves_other_media(): void
+    {
+        $this->qa(); $c = $this->content();
+        Storage::disk('local')->put('media/tech.png', 'approved screenshot');
+        $asset = Media::create(['name' => 'Technology screen product demo', 'file_name' => 'tech.png', 'disk' => 'local', 'path' => 'media/tech.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $scenes = $c->currentVersion->snapshot['scenes'];
+        $scenes[0]['visual_style'] = 'technology';
+        $scenes[0]['background_type'] = 'media';
+        $video = app(AssetStore::class)->put('rendered', 'mp4', 'video/mp4', true);
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andReturn($video));
+        $id = $this->postJson($this->root.'/contents/'.$c->id.'/revisions', ['expected_version_id' => $c->current_version_id, 'feedback' => 'Use a technology screen visual.', 'target' => 'scenes.intro', 'patch' => ['scenes' => $scenes]])->assertAccepted()->json('data.id');
+        $this->execute($id);
+        $after = $c->fresh()->currentVersion->snapshot['scenes'];
+        $this->assertSame($asset->id, $after[0]['media_id']);
+        $this->assertNull($after[1]['media_id']);
+        $this->assertSame('media', $after[0]['background_type']);
+    }
+
+    public function test_media_brightness_sampling_distinguishes_light_and_dark_backgrounds(): void
+    {
+        $paths = [];
+        try {
+            foreach (['black', 'white'] as $color) {
+                $path = sys_get_temp_dir().'/agent-'.$color.'-'.bin2hex(random_bytes(6)).'.png';
+                (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'color=c='.$color.':s=80x80', '-frames:v', '1', $path]))->mustRun();
+                $paths[$color] = $path;
+            }
+            $method = new \ReflectionMethod(VideoComposerAgent::class, 'brightness');
+            $this->assertLessThan(25, $method->invoke(app(VideoComposerAgent::class), $paths['black']));
+            $this->assertGreaterThan(230, $method->invoke(app(VideoComposerAgent::class), $paths['white']));
+        } finally { foreach ($paths as $path) @unlink($path); }
+    }
+
+    public function test_elevenlabs_receives_scene_narration_in_order_instead_of_visual_headlines(): void
+    {
+        $c = $this->content();
+        config(['affiliate_agent.voice_provider' => 'elevenlabs', 'affiliate_agent.elevenlabs_key' => 'test-key', 'affiliate_agent.voice_id' => 'test-voice']);
+        Http::fake(['api.elevenlabs.io/*' => Http::response('audio-fixture', 200, ['Content-Type' => 'audio/mpeg'])]);
+        $snapshot = $c->currentVersion->snapshot;
+        $snapshot['scenes'][0]['headline'] = 'Visual headline only';
+        app(VoiceAgent::class)->generate($snapshot, $c->id);
+        Http::assertSent(fn ($request) => $request['text'] === 'Turn text into a voice Paste text and generate' && !str_contains($request['text'], 'Visual headline only'));
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services\AffiliateAgent;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Models\Media;
 
 class ContentSchema
 {
@@ -31,11 +32,18 @@ class ContentSchema
         $rules = [
             'script' => 'required|string|max:6000',
             'scenes' => 'required|array|min:1|max:12',
-            'scenes.*' => 'required|array:id,text,duration,media_id,purpose,headline,body,visual_style,background_type,animation,layout,template',
+            'scenes.*' => 'required|array:id,text,duration,media_id,purpose,headline,body,visual_style,background_type,animation,layout,template,media_mode,media_locked,media_type,media_fit,media_focus,overlay_mode,media_origin',
             'scenes.*.id' => ['required', 'string', 'regex:/^[a-zA-Z0-9_-]{1,50}$/', 'distinct'],
             'scenes.*.text' => 'required|string|max:500',
             'scenes.*.duration' => 'required|numeric|min:1|max:45',
             'scenes.*.media_id' => 'present|nullable|integer|exists:media,id,deleted_at,NULL',
+            'scenes.*.media_mode' => ['sometimes', Rule::in(SceneDesignAgent::MEDIA_MODES)],
+            'scenes.*.media_locked' => 'sometimes|boolean',
+            'scenes.*.media_type' => ['sometimes', Rule::in(SceneDesignAgent::MEDIA_TYPES)],
+            'scenes.*.media_fit' => ['sometimes', Rule::in(SceneDesignAgent::MEDIA_FITS)],
+            'scenes.*.media_focus' => ['sometimes', Rule::in(SceneDesignAgent::MEDIA_FOCUSES)],
+            'scenes.*.overlay_mode' => ['sometimes', Rule::in(SceneDesignAgent::OVERLAY_MODES)],
+            'scenes.*.media_origin' => ['sometimes', Rule::in(SceneDesignAgent::MEDIA_ORIGINS)],
             'scenes.*.purpose' => ['sometimes', Rule::in(SceneDesignAgent::PURPOSES)],
             'scenes.*.headline' => 'sometimes|string|max:140',
             'scenes.*.body' => 'sometimes|string|max:500',
@@ -63,6 +71,13 @@ class ContentSchema
         $unknown = array_diff(array_keys($snapshot), array_diff(self::COMPONENTS, ['video']));
         if ($unknown) throw ValidationException::withMessages(['snapshot' => 'Unknown components: '.implode(', ', $unknown)]);
         $validated = Validator::make($snapshot, $rules)->validate();
+        foreach ($validated['scenes'] as $i => $scene) {
+            if (($scene['media_mode'] ?? null) === 'manual' && !$scene['media_id']) throw ValidationException::withMessages(["scenes.$i.media_id" => 'Manual backgrounds require a selected image or video.']);
+            if (!$scene['media_id']) continue;
+            $asset = Media::find($scene['media_id']);
+            if (!$asset || $asset->folder !== 'affiliate-agent' || !in_array($asset->mime_type, ['video/mp4', 'image/png', 'image/jpeg', 'image/webp'], true)) throw ValidationException::withMessages(["scenes.$i.media_id" => 'Choose an Affiliate Agent image or MP4.']);
+            if (isset($scene['media_type']) && $scene['media_type'] !== ($asset->mime_type === 'video/mp4' ? 'video' : 'image')) throw ValidationException::withMessages(["scenes.$i.media_type" => 'Media type must match the selected asset.']);
+        }
         $duration = array_sum(array_column($validated['scenes'], 'duration'));
         if ($duration < 15 || $duration > 45) throw ValidationException::withMessages(['scenes' => 'Total duration must be 15–45 seconds.']);
         return $validated;

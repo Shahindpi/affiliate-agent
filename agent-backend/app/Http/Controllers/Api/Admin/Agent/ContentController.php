@@ -104,9 +104,18 @@ class ContentController extends Controller
         return ApiResponse::success($media, 'Immutable agent asset uploaded.', 201);
     }
 
-    public function media()
+    public function media(Request $r)
     {
-        return ApiResponse::success(Media::where('folder', 'affiliate-agent')->latest()->limit(100)->get(['id', 'name', 'mime_type']));
+        $d = $r->validate(['search' => 'sometimes|nullable|string|max:100']);
+        $query = Media::where('folder', 'affiliate-agent');
+        if (!empty($d['search'])) $query->where('name', 'like', '%'.$d['search'].'%');
+        return ApiResponse::success($query->latest()->limit(100)->get(['id', 'name', 'mime_type', 'alt_text', 'caption']));
+    }
+
+    public function mediaPreview(Media $media)
+    {
+        abort_unless($media->folder === 'affiliate-agent' && in_array($media->mime_type, ['video/mp4', 'image/png', 'image/jpeg', 'image/webp'], true) && in_array($media->disk, ['local', 'public'], true) && Storage::disk($media->disk)->exists($media->path), 404);
+        return response()->file(Storage::disk($media->disk)->path($media->path), ['Content-Type' => $media->mime_type, 'Cache-Control' => 'private, no-store']);
     }
 
     public function publications()

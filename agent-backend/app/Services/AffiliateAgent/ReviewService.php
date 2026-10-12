@@ -16,6 +16,11 @@ class ReviewService
 {
     public function create(array $data, int $userId): Content
     {
+        if (isset($data['snapshot']['scenes']) && is_array($data['snapshot']['scenes'])) {
+            $narration = VoiceAgent::narration($data['snapshot']);
+            if (($data['snapshot']['captions'] ?? null) === ($data['snapshot']['script'] ?? null)) $data['snapshot']['captions'] = $narration;
+            $data['snapshot']['script'] = $narration;
+        }
         $snapshot = app(ContentSchema::class)->validate($data['snapshot']);
         if (!empty($data['affiliate_product_id'])) {
             $product = AffiliateProduct::findOrFail($data['affiliate_product_id']);
@@ -51,6 +56,13 @@ class ReviewService
             app(ContentSchema::class)->validateTarget($data['target'] ?? 'all', $base->snapshot);
             if (isset($data['patch'])) {
                 $new = app(ContentSchema::class)->validate(array_replace($base->snapshot, $data['patch']));
+                $new['scenes'] = app(SceneMediaRevision::class)->apply($base->snapshot['scenes'], $new['scenes'], $data['feedback'], true);
+                $oldScenes = array_column($base->snapshot['scenes'], null, 'id');
+                foreach ($new['scenes'] as $scene) {
+                    if (($scene['media_origin'] ?? null) !== 'uploaded' || ($oldScenes[$scene['id']]['media_id'] ?? null) === $scene['media_id']) continue;
+                    $media = \App\Models\Media::find($scene['media_id']);
+                    if (!$media || $media->user_id !== $userId || $media->created_at->lessThan($base->created_at)) throw ValidationException::withMessages(['media_origin' => 'Choose a video or image uploaded by this admin for this revision.']);
+                }
                 app(RevisionPlanner::class)->plan($base->snapshot, $new, $content->locks);
             }
             $feedback = Feedback::create(['content_id' => $id, 'base_version_id' => $base->id, 'created_by' => $userId, 'feedback' => $data['feedback'], 'target' => $data['target'] ?? 'all', 'locks' => $content->locks, 'patch' => $data['patch'] ?? null, 'status' => 'QUEUED']);

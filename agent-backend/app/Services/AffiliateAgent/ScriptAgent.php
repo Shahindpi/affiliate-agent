@@ -10,7 +10,7 @@ class ScriptAgent
     public function draft(string $idea, array $research, int $seconds, int $contentId): array
     {
         if (config('affiliate_agent.provider') === 'mock') {
-            $text = 'Explore '.$research['product'].' using only approved source information. Visit the official product page for details.';
+            $text = $research['product'].'. Explore verified benefits. See the product workflow. Explore official details.';
             return ['script' => $text, 'scenes' => [
                 ['id' => 'hook', 'text' => $research['product'], 'duration' => $seconds * 0.24, 'media_id' => null, 'purpose' => 'hook'],
                 ['id' => 'benefit', 'text' => 'Explore verified benefits', 'duration' => $seconds * 0.28, 'media_id' => null, 'purpose' => 'benefit'],
@@ -23,7 +23,7 @@ class ScriptAgent
         $response = Http::withToken(config('affiliate_agent.openai_key'))->timeout(90)->post('https://api.openai.com/v1/chat/completions', [
             'model' => config('affiliate_agent.model'), 'response_format' => ['type' => 'json_object'],
             'messages' => [
-                ['role' => 'system', 'content' => 'Draft a factual short-form affiliate reel from approved source excerpts only. Return JSON object with script, scenes (id,text,duration,media_id:null,purpose), captions, cta, disclosure. Plan a brief hook, problem or benefit, concrete product demo/workflow and closing CTA; vary scene count when appropriate (3–5), avoid repeating claims. Scene purpose is one of hook,problem,benefit,demo,closing. Scene durations sum to requested seconds. Scene text is concise on-screen copy. Do not invent product claims. Include an affiliate disclosure. No markdown.'],
+                ['role' => 'system', 'content' => 'Draft a factual short-form affiliate reel from approved source excerpts only. Return JSON object with script, scenes (id,text,duration,media_id:null,purpose), captions, cta, disclosure. Plan a brief hook, problem or benefit, concrete product demo/workflow and closing CTA; vary scene count when appropriate (3–5), avoid repeating claims. Scene purpose is one of hook,problem,benefit,demo,closing. Scene text is SPOKEN narration for that scene in order, script must equal all scene texts joined with spaces. Headline and body are separate on-screen summaries. Scene durations sum to requested seconds. Do not invent product claims. Include an affiliate disclosure. No markdown.'],
                 ['role' => 'user', 'content' => json_encode(compact('idea', 'research', 'seconds'), JSON_THROW_ON_ERROR)],
             ],
         ])->throw()->json();

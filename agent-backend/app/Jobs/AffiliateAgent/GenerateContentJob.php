@@ -38,6 +38,12 @@ class GenerateContentJob implements ShouldQueue
                 if (array_diff(array_keys($patch), array_diff(\App\Services\AffiliateAgent\ContentSchema::COMPONENTS, ['video']))) throw new \RuntimeException('Invalid preference patch.');
                 $snapshot = app(\App\Services\AffiliateAgent\ContentSchema::class)->validate(array_replace($snapshot, $patch));
             }
+            if (!$c->checkpoint) {
+                $snapshot['scenes'] = app(\App\Services\AffiliateAgent\MediaSelectionAgent::class)->select(
+                    $snapshot['scenes'], $c->product?->name ?? '', $c->brand?->name ?? '', false, $c->product?->category?->name ?? ''
+                );
+                $snapshot = app(\App\Services\AffiliateAgent\ContentSchema::class)->validate($snapshot);
+            }
             $checkpoint = $c->checkpoint ?? [];
             $c->update(['checkpoint' => [...$checkpoint, 'snapshot' => $snapshot]]);
             $artifacts = $agent->produce($snapshot, $checkpoint['artifacts'] ?? [], ['voice', 'render'], $c->id, null, $checkpoint['completed'] ?? [], function ($assets, $completed) use ($c, &$snapshot) { $c->update(['checkpoint' => ['snapshot' => $snapshot, 'artifacts' => $assets, 'completed' => $completed]]); });

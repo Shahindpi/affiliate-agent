@@ -25,6 +25,10 @@ class ComplianceQaAgent
             'affiliate_urls' => collect($snapshot['metadata'])->every(fn ($m) => !empty($m['affiliate_url'])),
         ];
         foreach ($artifacts['scenes'] ?? [] as $id => $asset) $checks['scene_'.$id] = app(AssetStore::class)->verify($asset);
-        return ['passed' => !in_array(false, $checks, true), 'checks' => $checks, 'duration' => $duration, 'review_required' => 'An admin must verify factual claims, media rights, pronunciation, captions and affiliate disclosure before final approval.'];
+        $warnings = [];
+        foreach ($snapshot['scenes'] as $scene) if (empty($scene['media_id']) && !in_array($scene['background_type'] ?? '', ['solid_light', 'solid_dark'], true)) {
+            $warnings[] = 'Scene '.$scene['id'].' uses an animated fallback. Upload relevant approved footage or product media for a real background.';
+        }
+        return ['passed' => !in_array(false, $checks, true), 'checks' => $checks, 'duration' => $duration, 'warnings' => $warnings, 'review_required' => 'An admin must verify factual claims, media rights, pronunciation, captions and affiliate disclosure before final approval.'];
     }
 }

@@ -10,6 +10,11 @@ use Symfony\Component\Process\Process;
 
 class VoiceAgent
 {
+    public static function narration(array $snapshot): string
+    {
+        return implode(' ', array_map(fn ($scene) => trim($scene['text']), $snapshot['scenes']));
+    }
+
     public function generate(array $snapshot, int $contentId): array
     {
         $start = microtime(true);
@@ -28,10 +33,10 @@ class VoiceAgent
             if (config('affiliate_agent.voice_provider') !== 'elevenlabs') throw new \RuntimeException('Unsupported voice provider.');
             $voiceId = $snapshot['voice']['voice_id'] ?: \App\Models\Agent\Setting::current()->default_voice_id ?: config('affiliate_agent.voice_id');
             if (!$voiceId || !config('affiliate_agent.elevenlabs_key') || !preg_match('/^[\w-]+$/', $voiceId)) throw new \RuntimeException('ElevenLabs voice configuration is missing or invalid.');
-            $audio = Http::withHeaders(['xi-api-key' => config('affiliate_agent.elevenlabs_key'), 'Accept' => 'audio/mpeg'])->timeout(120)->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voiceId, ['text' => $snapshot['script'], 'model_id' => config('affiliate_agent.voice_model')])->throw()->body();
+            $audio = Http::withHeaders(['xi-api-key' => config('affiliate_agent.elevenlabs_key'), 'Accept' => 'audio/mpeg'])->timeout(120)->post('https://api.elevenlabs.io/v1/text-to-speech/'.$voiceId, ['text' => self::narration($snapshot), 'model_id' => config('affiliate_agent.voice_model')])->throw()->body();
             $asset = app(AssetStore::class)->put($audio, 'mp3', 'audio/mpeg');
         }
-        Usage::create(['content_id' => $contentId, 'provider' => $mock ? 'mock' : 'elevenlabs', 'operation' => 'voice', 'characters' => mb_strlen($snapshot['script']), 'duration_seconds' => microtime(true) - $start, 'mock' => $mock]);
+        Usage::create(['content_id' => $contentId, 'provider' => $mock ? 'mock' : 'elevenlabs', 'operation' => 'voice', 'characters' => mb_strlen(self::narration($snapshot)), 'duration_seconds' => microtime(true) - $start, 'mock' => $mock]);
         return $asset;
     }
 }

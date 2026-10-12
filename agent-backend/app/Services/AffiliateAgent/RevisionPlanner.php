@@ -28,6 +28,20 @@ class RevisionPlanner
 
     public function plan(array $before, array $after, array $locks): array
     {
+        $oldNarration = VoiceAgent::narration($before);
+        $newNarration = VoiceAgent::narration($after);
+        if ($before['script'] !== $after['script'] && $oldNarration === $newNarration) {
+            $words = preg_split('/\s+/u', trim($after['script']));
+            $weights = array_map(fn ($scene) => max(1, count(preg_split('/\s+/u', trim($scene['text'])))), $after['scenes']);
+            $remaining = count($words); $totalWeight = array_sum($weights); $offset = 0;
+            foreach ($after['scenes'] as $i => &$scene) {
+                $left = count($after['scenes']) - $i - 1;
+                $count = $left ? max(1, min($remaining - $left, (int) round($remaining * $weights[$i] / max(1, $totalWeight)))) : $remaining;
+                $scene['text'] = implode(' ', array_slice($words, $offset, $count));
+                $offset += $count; $remaining -= $count; $totalWeight -= $weights[$i];
+            }
+            unset($scene);
+        } elseif ($oldNarration !== $newNarration) $after['script'] = $newNarration;
         // Script is the narration source and captions must be synchronized with it.
         if ($before['script'] !== $after['script'] && $before['captions'] === $after['captions']) $after['captions'] = $after['script'];
         $changes = $this->changes($before, $after);
