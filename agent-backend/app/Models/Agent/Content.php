@@ -3,9 +3,11 @@
 namespace App\Models\Agent;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Content extends Model
 {
+    use SoftDeletes;
     protected $table = 'agent_contents';
     protected $guarded = ['id'];
     protected $hidden = ['checkpoint'];

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiErrorMessage } from "@/lib/api-error";
-import { searchAgentMedia, previewAgentMedia, reviseContent, uploadAgentMedia } from "@/services/affiliate-agent";
+import { searchAgentMedia, previewAgentMedia, reviseContent, uploadAgentMedia, agentMediaLimits } from "@/services/affiliate-agent";
+import { validateAgentMediaFile } from "@/lib/affiliate-media-upload";
 import type { AgentMedia, Scene, Version } from "@/types/affiliate-agent";
 
 type Source = "auto" | "existing" | "upload_image" | "upload_video";
@@ -41,12 +42,13 @@ export default function SceneMediaControls({ version, contentId, disabled, run }
   const [uploaded, setUploaded] = useState<Record<number, AgentMedia>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const media = useQuery({ queryKey: ["agent-media", search], queryFn: () => searchAgentMedia(search) });
+  const limits = useQuery({ queryKey: ["agent-media-limits"], queryFn: agentMediaLimits });
   function change(id: string, values: Partial<Draft>) { setDrafts(old => ({ ...old, [id]: { ...old[id], ...values } })); setDirty(old => old.includes(id) ? old : [...old, id]); }
   async function upload(scene: Scene, file: File) {
     const draft = drafts[scene.id];
-    const wanted = draft.source === "upload_video" ? "video/" : "image/";
-    if (!file.type.startsWith(wanted) || !["video/mp4", "image/png", "image/jpeg", "image/webp"].includes(file.type)) { toast.error("Choose an MP4 video or a PNG, JPEG, or WebP image for this source."); return; }
-    if (file.size > 100 * 1024 * 1024) { toast.error("The maximum scene media file size is 100 MB."); return; }
+    if (!limits.data) { toast.error("Upload limits are unavailable. Try again shortly."); return; }
+    const error = validateAgentMediaFile(file, limits.data, draft.source === "upload_video" ? "video" : "image");
+    if (error) { toast.error(error); return; }
     setUploading(scene.id);
     try {
       const form = new FormData(); form.set("file", file); form.set("name", file.name.replace(/\.[^.]+$/, "").replaceAll(/[-_]/g, " "));
@@ -71,7 +73,7 @@ export default function SceneMediaControls({ version, contentId, disabled, run }
     });
     await run(() => reviseContent(contentId, version.id, `Admin updated background media and display settings for ${dirty.join(", ")}.`, "scenes", { scenes }), "Scene media revision queued for review.");
   }
-  return <Card><CardHeader><CardTitle>Scene background media</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">Mix manual footage with automatic media on other scenes. Uploading saves an asset; saving the revision applies it to a new version. Unlock a locked background in one revision before replacing it.</p>
+  return <Card><CardHeader><CardTitle>Scene background media</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">Mix manual footage with automatic media on other scenes. Uploading saves an asset; saving the revision applies it to a new version. Unlock a locked background in one revision before replacing it.</p><p className="mb-4 text-sm text-muted-foreground" role="note">{limits.data ? `Images: max ${limits.data.image} MB · Videos: max ${limits.data.video} MB. JPEG, PNG, WebP and MP4.` : "Loading upload limits…"}</p>
     <form className="space-y-4" onSubmit={e => { void submit(e).catch(error => toast.error(error instanceof Error ? error.message : "Could not save scene media.")); }}>
       <label className="block text-sm">Find existing media<Input className="mt-1" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by asset name" /></label>
       {version.snapshot.scenes.map((scene, i) => {
@@ -81,7 +83,7 @@ export default function SceneMediaControls({ version, contentId, disabled, run }
         return <fieldset className="rounded-lg border p-4" key={scene.id} disabled={disabled || uploading === scene.id}><legend className="px-1 font-medium">{i + 1}. {scene.id} · {scene.purpose || "scene"}</legend>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm">Background source<select className={fieldClass} value={draft.source} disabled={originallyLocked} onChange={e => { const source = e.target.value as Source; change(scene.id, { source, media_id: source === "auto" ? null : source === "existing" ? null : null, media_origin: source === "auto" ? "auto" : "manual", media_type: undefined }); }}><option value="auto">Auto (agent selects)</option><option value="existing">Select existing media</option><option value="upload_image">Upload image</option><option value="upload_video">Upload video</option></select></label>
           {draft.source === "existing" && <label className="text-sm">Library asset<select className={fieldClass} value={draft.media_id || ""} disabled={originallyLocked} onChange={e => { const id = Number(e.target.value) || null; const selected = media.data?.find(m => m.id === id); change(scene.id, { media_id: id, media_type: selected ? selected.mime_type === "video/mp4" ? "video" : "image" : undefined, media_origin: "manual" }); }}><option value="">Select an image or MP4</option>{draft.media_id && !media.data?.some(m => m.id === draft.media_id) && <option value={draft.media_id}>{asset?.name || `Current asset #${draft.media_id}`}</option>}{media.data?.filter(m => m.mime_type === "video/mp4" || m.mime_type.startsWith("image/")).map(m => <option key={m.id} value={m.id}>{m.name} · {m.mime_type === "video/mp4" ? "video" : "image"}</option>)}</select></label>}
-          {(draft.source === "upload_image" || draft.source === "upload_video") && <label className="text-sm">{uploading === scene.id ? "Uploading…" : `Choose ${draft.source === "upload_video" ? "video" : "image"} to upload`}<Input className="mt-1" type="file" accept={draft.source === "upload_video" ? "video/*" : "image/*"} disabled={originallyLocked} onChange={e => { const file = e.target.files?.[0]; e.currentTarget.value = ""; if (file) void upload(scene, file); }} /></label>}
+          {(draft.source === "upload_image" || draft.source === "upload_video") && <label className="text-sm">{uploading === scene.id ? "Uploading…" : `Choose ${draft.source === "upload_video" ? "video" : "image"} to upload`}<Input className="mt-1" type="file" accept={draft.source === "upload_video" ? "video/mp4" : "image/jpeg,image/png,image/webp"} disabled={originallyLocked || !limits.data} onChange={e => { const file = e.target.files?.[0]; e.currentTarget.value = ""; if (file) void upload(scene, file); }} /></label>}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.media_locked} onChange={e => change(scene.id, { media_locked: e.target.checked })} />Lock this background</label>
           <label className="text-sm">Fit<select className={fieldClass} value={draft.media_fit} onChange={e => change(scene.id, { media_fit: e.target.value as Draft["media_fit"] })}><option value="cover">Cover</option><option value="contain">Contain</option></select></label>
           <label className="text-sm">Focus<select className={fieldClass} value={draft.media_focus} onChange={e => change(scene.id, { media_focus: e.target.value as Draft["media_focus"] })}>{["center", "top", "bottom", "left", "right"].map(value => <option key={value}>{value}</option>)}</select></label>

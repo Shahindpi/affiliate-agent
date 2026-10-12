@@ -13,6 +13,7 @@ return [
     'ffmpeg' => env('AGENT_FFMPEG', 'ffmpeg'),
     'ffprobe' => env('AGENT_FFPROBE', 'ffprobe'),
     'render_timeout' => (int) env('AGENT_RENDER_TIMEOUT', 600),
+    'media_upload_limits_mb' => ['image' => 10, 'video' => 100],
     'max_daily_revisions' => (int) env('AGENT_MAX_DAILY_REVISIONS', 30),
     'admin_url' => env('AGENT_ADMIN_URL', 'http://localhost:3000/admin/affiliate-agent/social-accounts'),
     'oauth' => [

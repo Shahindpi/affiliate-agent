@@ -18,6 +18,7 @@ use App\Services\AffiliateAgent\ReviewService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -46,6 +47,18 @@ class ContentController extends Controller
     {
         $content->load(['brand:id,name', 'product:id,name', 'feedback', 'approvals', 'publications', 'versions']);
         return ApiResponse::success([...$content->toArray(), 'versions' => VersionResource::collection($content->versions)]);
+    }
+
+    public function destroy(Content $content)
+    {
+        DB::transaction(function () use ($content) {
+            $content = Content::whereKey($content->id)->lockForUpdate()->firstOrFail();
+            abort_if(in_array($content->status, ['GENERATING', 'REVISION_PENDING'], true), 409, 'Wait for the active generation or revision before deleting this content.');
+            abort_if($content->publications()->whereIn('status', ['SCHEDULED', 'RETRY_PENDING', 'PROCESSING'])->exists(), 409, 'Cancel pending publications before deleting this content.');
+            // Retain immutable versions, feedback, publication history and their media files for audit.
+            $content->delete();
+        });
+        return ApiResponse::success(null, 'Content removed from the list. Its audit history is retained.');
     }
 
     public function revision(RevisionRequest $r, Content $content, ReviewService $review)
@@ -98,10 +111,19 @@ class ContentController extends Controller
 
     public function upload(Request $r, AssetStore $store)
     {
-        $r->validate(['file' => 'required|file|max:102400|mimetypes:video/mp4,audio/mpeg,audio/wav,audio/x-wav,image/png,image/jpeg,image/webp', 'name' => 'required|string|max:255']);
+        $limits = config('affiliate_agent.media_upload_limits_mb');
+        $r->validate(['file' => ['required', 'file', 'mimetypes:video/mp4,image/png,image/jpeg,image/webp', 'extensions:mp4,png,jpg,jpeg,webp', function ($attribute, $file, $fail) use ($limits) {
+            $kind = $file->getMimeType() === 'video/mp4' ? 'video' : 'image';
+            if ($file->getSize() > $limits[$kind] * 1024 * 1024) $fail(ucfirst($kind).' files must be '.$limits[$kind].' MB or smaller.');
+        }], 'name' => 'required|string|max:255']);
         $a = $store->upload($r->file('file'));
         $media = Media::create(['user_id' => $r->user()->id, 'name' => $r->input('name'), 'file_name' => basename($a['path']), 'disk' => 'local', 'path' => $a['path'], 'mime_type' => $a['mime_type'], 'size' => Storage::disk('local')->size($a['path']), 'folder' => 'affiliate-agent']);
         return ApiResponse::success($media, 'Immutable agent asset uploaded.', 201);
+    }
+
+    public function mediaLimits()
+    {
+        return ApiResponse::success(config('affiliate_agent.media_upload_limits_mb'));
     }
 
     public function media(Request $r)

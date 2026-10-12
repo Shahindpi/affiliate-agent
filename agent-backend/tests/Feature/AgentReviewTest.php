@@ -750,6 +750,8 @@ class AgentReviewTest extends TestCase
         $motion = new \ReflectionMethod(VideoComposerAgent::class, 'backgroundMotion');
         $this->assertStringContainsString('crop=1080:1920', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'top'], false, true));
         $this->assertStringContainsString("y='0'", $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'top'], false, true));
+        $this->assertStringNotContainsString('sin(', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'center'], false, true));
+        $this->assertStringNotContainsString('cos(', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'center'], false, true));
         $this->assertStringContainsString('pad=1080:1920', $motion->invoke($composer, ['media_fit' => 'contain', 'media_focus' => 'right'], false, false));
         $this->assertStringContainsString('sin(n/60)', $motion->invoke($composer, ['media_fit' => 'cover', 'media_focus' => 'center'], false, false));
         $snapshot = app(ContentSchema::class)->validate($this->snapshot());
@@ -825,7 +827,7 @@ class AgentReviewTest extends TestCase
             $this->get($this->root.'/media/'.$image['id'].'/preview')->assertOk()->assertHeader('Content-Type', 'image/png');
             $this->get($this->root.'/media/'.$video['id'].'/preview')->assertOk()->assertHeader('Content-Type', 'video/mp4');
             $scenes = $snapshot['scenes'];
-            $scenes[0] = [...$scenes[0], 'media_id' => $image['id'], 'media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'image', 'media_origin' => 'uploaded', 'media_fit' => 'contain', 'media_focus' => 'top', 'overlay_mode' => 'strong', 'background_type' => 'media'];
+            $scenes[0] = [...$scenes[0], 'media_id' => $image['id'], 'media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'image', 'media_origin' => 'uploaded', 'media_fit' => 'cover', 'media_focus' => 'top', 'overlay_mode' => 'strong', 'background_type' => 'media'];
             $scenes[1] = [...$scenes[1], 'media_id' => $video['id'], 'media_mode' => 'manual', 'media_locked' => false, 'media_type' => 'video', 'media_origin' => 'uploaded', 'media_fit' => 'cover', 'media_focus' => 'center', 'overlay_mode' => 'auto', 'background_type' => 'media'];
             $scenes[2] = [...$scenes[2], 'media_mode' => 'auto', 'background_type' => 'media'];
             $id = $this->postJson($this->root.'/contents/'.$content->id.'/revisions', ['expected_version_id' => $base->id, 'feedback' => 'Use uploaded image and video; find a relevant closing background.', 'target' => 'scenes', 'patch' => ['scenes' => $scenes]])->assertAccepted()->json('data.id');
@@ -908,5 +910,36 @@ class AgentReviewTest extends TestCase
         $snapshot['scenes'][0]['headline'] = 'Visual headline only';
         app(VoiceAgent::class)->generate($snapshot, $c->id);
         Http::assertSent(fn ($request) => $request['text'] === 'Turn text into a voice Paste text and generate' && !str_contains($request['text'], 'Visual headline only'));
+    }
+
+    public function test_media_limits_validate_image_video_size_and_extension(): void
+    {
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII=');
+        $this->getJson($this->root.'/media-limits')->assertOk()->assertJsonPath('data.image', 10)->assertJsonPath('data.video', 100);
+        $this->postJson($this->root.'/media', ['name' => 'Too large image', 'file' => UploadedFile::fake()->createWithContent('large.png', $png.str_repeat('x', 11 * 1024 * 1024))])->assertUnprocessable();
+        $this->postJson($this->root.'/media', ['name' => 'Wrong extension', 'file' => UploadedFile::fake()->createWithContent('photo.gif', $png)])->assertUnprocessable();
+        $this->postJson($this->root.'/media', ['name' => 'Valid image', 'file' => UploadedFile::fake()->createWithContent('photo.png', $png)])->assertCreated()->assertJsonPath('data.mime_type', 'image/png');
+    }
+
+    public function test_delete_content_hides_it_but_keeps_immutable_history_and_artifacts(): void
+    {
+        $content = $this->content();
+        $version = $content->currentVersion;
+        $artifact = $version->artifacts['video'];
+        $this->deleteJson($this->root.'/contents/'.$content->id)->assertOk();
+        $this->assertSoftDeleted('agent_contents', ['id' => $content->id]);
+        $this->getJson($this->root.'/contents/'.$content->id)->assertNotFound();
+        $this->assertDatabaseHas('agent_versions', ['id' => $version->id]);
+        $this->assertTrue(app(AssetStore::class)->verify($artifact));
+        $this->assertSame(0, $this->getJson($this->root.'/contents')->assertOk()->json('data.total'));
+    }
+
+    public function test_delete_rejects_content_with_active_generation_or_publication(): void
+    {
+        $content = Content::create(['title' => 'Generating', 'created_by' => $this->admin->id, 'locks' => [], 'status' => 'GENERATING']);
+        $this->deleteJson($this->root.'/contents/'.$content->id)->assertConflict();
+        $content = $this->content();
+        $content->publications()->create(['version_id' => $content->current_version_id, 'snapshot_hash' => $content->currentVersion->snapshot_hash, 'platform' => 'youtube', 'mode' => 'manual', 'status' => 'SCHEDULED', 'scheduled_at' => now(), 'created_by' => $this->admin->id]);
+        $this->deleteJson($this->root.'/contents/'.$content->id)->assertConflict();
     }
 }

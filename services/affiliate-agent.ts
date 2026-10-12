@@ -1,10 +1,12 @@
 import api from "@/lib/axios";
 import type { ApiResponse } from "@/types/api";
 import type { AgentContent, AgentMedia, Feedback, Overview, Preference, PreferencePayload, Snapshot } from "@/types/affiliate-agent";
+import type { AgentMediaLimits } from "@/lib/affiliate-media-upload";
 const root = "/admin/affiliate-agent";
 export async function agentOverview() { return (await api.get<ApiResponse<Overview>>(`${root}/overview`)).data.data; }
 export async function agentContents(params: { status?: string; search?: string; page: number }) { return (await api.get<ApiResponse<{ data: AgentContent[]; current_page: number; last_page: number; total: number }>>(`${root}/contents`, { params })).data.data; }
 export async function agentContent(id: number) { return (await api.get<ApiResponse<AgentContent>>(`${root}/contents/${id}`)).data.data; }
+export async function deleteAgentContent(id: number) { await api.delete(`${root}/contents/${id}`); }
 export async function createAgentContent(payload: { title: string; brand_id: number | null; affiliate_product_id: number | null; snapshot: Snapshot }) { return (await api.post<ApiResponse<AgentContent>>(`${root}/contents`, payload)).data.data; }
 export async function reviseContent(id: number, expected: number, feedback: string, target: string, patch?: Partial<Snapshot>) { return (await api.post<ApiResponse<Feedback>>(`${root}/contents/${id}/revisions`, { expected_version_id: expected, feedback, target, ...(patch ? { patch } : {}) })).data.data; }
 export async function contentAction(id: number, action: "approve" | "reject" | "restore" | "publications", expected: number, extra: Record<string, unknown> = {}) { return (await api.post(`${root}/contents/${id}/${action}`, { expected_version_id: expected, ...extra })).data.data; }
@@ -13,6 +15,7 @@ export async function agentPreferences() { return (await api.get<ApiResponse<Pre
 export async function savePreference(payload: PreferencePayload, id?: number) { return (await (id ? api.put(`${root}/preferences/${id}`, payload) : api.post(`${root}/preferences`, payload))).data.data; }
 export async function disablePreference(id: number) { await api.delete(`${root}/preferences/${id}`); }
 export async function agentMedia() { return (await api.get<ApiResponse<AgentMedia[]>>(`${root}/media`)).data.data; }
+export async function agentMediaLimits() { return (await api.get<ApiResponse<AgentMediaLimits>>(`${root}/media-limits`)).data.data; }
 export async function searchAgentMedia(search: string) { return (await api.get<ApiResponse<AgentMedia[]>>(`${root}/media`, { params: { search } })).data.data; }
 export async function uploadAgentMedia(form: FormData): Promise<AgentMedia> { return (await api.post<ApiResponse<AgentMedia>>(`${root}/media`, form, { headers: { "Content-Type": "multipart/form-data" } })).data.data; }
 export async function previewAgentMedia(id: number): Promise<Blob> { return (await api.get<Blob>(`${root}/media/${id}/preview`, { responseType: "blob" })).data; }

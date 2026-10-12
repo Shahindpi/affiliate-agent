@@ -10,10 +10,12 @@ Route::prefix('v1/admin/affiliate-agent')->middleware(['auth:sanctum', 'admin', 
     Route::get('overview', [ContentController::class, 'overview']);
     Route::get('media', [ContentController::class, 'media']);
     Route::post('media', [ContentController::class, 'upload']);
+    Route::get('media-limits', [ContentController::class, 'mediaLimits']);
     Route::get('media/{media}/preview', [ContentController::class, 'mediaPreview']);
     Route::get('contents', [ContentController::class, 'index']);
     Route::post('contents', [ContentController::class, 'store']);
     Route::get('contents/{content}', [ContentController::class, 'show']);
+    Route::delete('contents/{content}', [ContentController::class, 'destroy']);
     Route::post('contents/{content}/revisions', [ContentController::class, 'revision']);
     Route::put('contents/{content}/locks', [ContentController::class, 'locks']);
     Route::post('contents/{content}/approve', [ContentController::class, 'approve']);

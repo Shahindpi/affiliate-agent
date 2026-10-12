@@ -65,7 +65,8 @@ class VideoComposerAgent
                         'light' => .22, 'medium' => .38, 'strong' => .58, 'none' => 0.0, default => $automatic,
                     };
                     $darkInk[$scene['id']] = ($scene['background_type'] ?? '') === 'solid_light' || ($asset && !$solid && $brightness !== null && $brightness * (1 - $opacity) > 145);
-                    $shade = $solid || $opacity === 0.0 ? '' : ($demo ? ',drawbox=x=0:y=740:w=iw:h=900:color=black@'.min(.66, $opacity + .08).':t=fill' : ',drawbox=x=0:y=150:w=iw:h=1450:color=black@'.$opacity.':t=fill');
+                    // A single full-frame tint preserves the selected media across the entire scene.
+                    $shade = $solid || $opacity === 0.0 ? '' : ',drawbox=x=0:y=0:w=iw:h=ih:color=black@'.($demo ? min(.66, $opacity + .08) : $opacity).':t=fill';
                     $filters[] = '['.$index.':v]'.$motion.',setsar=1,fps=30,trim=duration='.$scene['duration'].',setpts=PTS-STARTPTS'.$shade.'[v'.$index.']';
                 }
                 $n = count($snapshot['scenes']);
