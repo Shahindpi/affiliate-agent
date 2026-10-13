@@ -24,7 +24,7 @@ class RevisionAgent
         if (!$adminPatch && $mediaRevision->hasIntent($feedback->feedback) && !isset($patch['scenes'])) $patch['scenes'] = $base->snapshot['scenes'];
         if (!$patch || array_diff(array_keys($patch), array_diff(ContentSchema::COMPONENTS, ['video']))) throw ValidationException::withMessages(['patch' => 'Invalid revision components.']);
         if (isset($patch['scenes']) && is_array($patch['scenes'])) {
-            $patch['scenes'] = app(SceneDesignAgent::class)->normalize($patch['scenes'], $base->snapshot['scenes']);
+            $patch['scenes'] = app(SceneDesignAgent::class)->normalize($patch['scenes'], $base->snapshot['scenes'], !$adminPatch);
             if (!$adminPatch) $patch['scenes'] = $mediaRevision->apply($base->snapshot['scenes'], $patch['scenes'], $feedback->feedback, false);
         }
         $feedback->update(['patch' => $patch]);

@@ -1,4 +1,5 @@
 "use client";
+import { fileUploadClass } from "@/lib/file-upload-style";
 
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -82,7 +83,7 @@ export default function Page() {
           {!["CSV_IMPORT", "WEBHOOK"].includes(s.type) && <button className="underline disabled:opacity-50" disabled={syncing || !s.enabled} onClick={() => void action(s, "sync")}>{syncActionInFlight ? "Syncing…" : "Sync Now"}</button>}
           <button className="underline" onClick={() => void run(() => saveSource({ brand_id: s.brand_id, name: s.name, type: s.type, url: s.url, allowed_domains: s.allowed_domains, notes: s.notes, enabled: !s.enabled }, s.id), "Source updated.")}>{s.enabled ? "Disable" : "Enable"}</button>
         </div>
-        {s.type === "CSV_IMPORT" && <label className="text-sm">Import CSV with title,body,source_url columns <input type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) void run(() => importSourceCsv(s.id, file), "CSV imported for review."); }} /></label>}
+        {s.type === "CSV_IMPORT" && <label className="text-sm">Import CSV with title,body,source_url columns <input className={fileUploadClass} type="file" accept=".csv,text/csv" onChange={e => { const file = e.target.files?.[0]; if (file) void run(() => importSourceCsv(s.id, file), "CSV imported for review."); }} /><span className="mt-1 block text-xs text-muted-foreground">CSV: max 1 MB.</span></label>}
         {s.runs.length > 0 && <details className="mt-2 text-sm"><summary>Synchronization runs ({s.runs.length})</summary>{s.runs.map(run => <p className="mt-1" key={run.id}>{run.status} · {date(run.started_at)} → {date(run.finished_at)} · HTTP {run.http_status ?? "—"} · {run.extracted_items} item(s){run.error ? ` · ${run.error}` : ""}</p>)}</details>}
         {s.documents.map(d => <div key={d.id} className="mt-3 rounded border p-3 text-sm"><p>{d.title} · {d.status} · {d.synced_at}</p><p className="break-all">{d.source_url}</p><details><summary>View imported text</summary><pre className="max-h-60 overflow-auto whitespace-pre-wrap">{d.body}</pre></details>{d.status === "PENDING" && <button className="mt-2 underline" onClick={() => void run(() => approveSourceDocument(d.id), "Source knowledge approved.")}>Approve factual source</button>}</div>)}
       </article>;

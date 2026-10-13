@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { agentMedia, agentMediaLimits, uploadAgentMedia } from "@/services/affiliate-agent";
 import { validateAgentMediaFile } from "@/lib/affiliate-media-upload";
 import { apiErrorMessage } from "@/lib/api-error";
+import { fileUploadClass } from "@/lib/file-upload-style";
 
 export default function Page() {
   const [busy, setBusy] = useState(false);
@@ -36,7 +37,7 @@ export default function Page() {
     {limits.isError && <p role="alert">Could not load upload limits. Upload is unavailable.</p>}
     <form onSubmit={upload} className="mb-6 flex max-w-3xl flex-wrap items-center gap-3">
       <Input className="max-w-xs" name="name" aria-label="Asset name" placeholder="Asset name" required maxLength={255} />
-      <input name="file" aria-label="Asset file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4" required onChange={e => setFile(e.target.files?.[0] || null)} />
+      <input className={fileUploadClass} name="file" aria-label="Asset file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4" required onChange={e => setFile(e.target.files?.[0] || null)} />
       <Button type="submit" disabled={busy || !limits.data}>Upload asset</Button>
     </form>
     {q.isPending && <p>Loading assets…</p>}{q.isError && <p role="alert">Could not load assets.</p>}

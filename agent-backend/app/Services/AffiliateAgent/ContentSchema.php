@@ -32,7 +32,7 @@ class ContentSchema
         $rules = [
             'script' => 'required|string|max:6000',
             'scenes' => 'required|array|min:1|max:12',
-            'scenes.*' => 'required|array:id,text,duration,media_id,purpose,headline,body,visual_style,background_type,animation,layout,template,media_mode,media_locked,media_type,media_fit,media_focus,overlay_mode,media_origin',
+            'scenes.*' => 'required|array:id,text,duration,media_id,purpose,headline,body,visual_style,background_type,animation,layout,template,media_mode,media_locked,media_type,media_fit,media_focus,overlay_mode,media_origin,headline_font_size,body_font_size,headline_color,body_color,cta_text_color,cta_background_color,cta_border_color',
             'scenes.*.id' => ['required', 'string', 'regex:/^[a-zA-Z0-9_-]{1,50}$/', 'distinct'],
             'scenes.*.text' => 'required|string|max:500',
             'scenes.*.duration' => 'required|numeric|min:1|max:45',
@@ -47,6 +47,13 @@ class ContentSchema
             'scenes.*.purpose' => ['sometimes', Rule::in(SceneDesignAgent::PURPOSES)],
             'scenes.*.headline' => 'sometimes|string|max:140',
             'scenes.*.body' => 'sometimes|string|max:500',
+            'scenes.*.headline_font_size' => 'sometimes|integer|between:68,104',
+            'scenes.*.body_font_size' => 'sometimes|integer|between:36,60',
+            'scenes.*.headline_color' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'scenes.*.body_color' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'scenes.*.cta_text_color' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'scenes.*.cta_background_color' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'scenes.*.cta_border_color' => ['sometimes', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'scenes.*.visual_style' => ['sometimes', Rule::in(SceneDesignAgent::STYLES)],
             'scenes.*.background_type' => ['sometimes', Rule::in(SceneDesignAgent::BACKGROUNDS)],
             'scenes.*.animation' => ['sometimes', Rule::in(SceneDesignAgent::ANIMATIONS)],
@@ -73,6 +80,7 @@ class ContentSchema
         $validated = Validator::make($snapshot, $rules)->validate();
         foreach ($validated['scenes'] as $i => $scene) {
             if (($scene['media_mode'] ?? null) === 'manual' && !$scene['media_id']) throw ValidationException::withMessages(["scenes.$i.media_id" => 'Manual backgrounds require a selected image or video.']);
+            if (($scene['media_mode'] ?? null) === 'manual' && $scene['media_id']) $validated['scenes'][$i]['background_type'] = 'media';
             if (!$scene['media_id']) continue;
             $asset = Media::find($scene['media_id']);
             if (!$asset || $asset->folder !== 'affiliate-agent' || !in_array($asset->mime_type, ['video/mp4', 'image/png', 'image/jpeg', 'image/webp'], true)) throw ValidationException::withMessages(["scenes.$i.media_id" => 'Choose an Affiliate Agent image or MP4.']);

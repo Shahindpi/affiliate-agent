@@ -27,7 +27,7 @@ class SceneDesignAgent
         'see_full_details' => 'See full details', 'explore_now' => 'Explore now',
     ];
 
-    public function normalize(array $scenes, array $previous): array
+    public function normalize(array $scenes, array $previous, bool $preserveStyle = true): array
     {
         $fields = [
             'purpose' => self::PURPOSES, 'visual_style' => self::STYLES,
@@ -36,6 +36,9 @@ class SceneDesignAgent
         ];
         $old = array_column($previous, null, 'id');
         foreach ($scenes as &$scene) {
+            if ($preserveStyle) foreach (['headline_font_size', 'body_font_size', 'headline_color', 'body_color', 'cta_text_color', 'cta_background_color', 'cta_border_color'] as $field) {
+                if (!array_key_exists($field, $scene) && isset($old[$scene['id'] ?? ''][$field])) $scene[$field] = $old[$scene['id']][$field];
+            }
             foreach ($fields as $field => $options) {
                 if (!array_key_exists($field, $scene) || in_array($scene[$field], $options, true)) continue;
                 $raw = is_string($scene[$field]) ? strtolower($scene[$field]) : '';

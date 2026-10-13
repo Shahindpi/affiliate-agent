@@ -942,4 +942,114 @@ class AgentReviewTest extends TestCase
         $content->publications()->create(['version_id' => $content->current_version_id, 'snapshot_hash' => $content->currentVersion->snapshot_hash, 'platform' => 'youtube', 'mode' => 'manual', 'status' => 'SCHEDULED', 'scheduled_at' => now(), 'created_by' => $this->admin->id]);
         $this->deleteJson($this->root.'/contents/'.$content->id)->assertConflict();
     }
+
+    public function test_initial_generation_preserves_manually_selected_image_and_video_and_style_fields(): void
+    {
+        $this->qa();
+        Storage::disk('local')->put('media/nature.mp4', 'video fixture');
+        Storage::disk('local')->put('media/product.png', 'image fixture');
+        $video = Media::create(['name' => 'Nature bridge and hills', 'file_name' => 'nature.mp4', 'disk' => 'local', 'path' => 'media/nature.mp4', 'mime_type' => 'video/mp4', 'folder' => 'affiliate-agent']);
+        $image = Media::create(['name' => 'Product screenshot', 'file_name' => 'product.png', 'disk' => 'local', 'path' => 'media/product.png', 'mime_type' => 'image/png', 'folder' => 'affiliate-agent']);
+        $snapshot = $this->snapshot();
+        $snapshot['scenes'][0] += ['media_mode' => 'manual', 'media_type' => 'video', 'media_fit' => 'cover', 'headline_font_size' => 94, 'body_font_size' => 51, 'headline_color' => '#f4ce52', 'body_color' => '#ffffff', 'cta_text_color' => '#ffffff', 'cta_background_color' => '#101820', 'cta_border_color' => '#16805c'];
+        $snapshot['scenes'][0]['media_id'] = $video->id;
+        $snapshot['scenes'][0]['background_type'] = 'animated_abstract';
+        $snapshot['scenes'][1] += ['media_mode' => 'manual', 'media_type' => 'image', 'media_fit' => 'cover'];
+        $snapshot['scenes'][1]['media_id'] = $image->id;
+        $id = $this->postJson($this->root.'/contents', ['title' => 'Manual initial media', 'snapshot' => $snapshot])->assertCreated()->json('data.id');
+        $voice = app(AssetStore::class)->put('voice', 'wav', 'audio/wav', true);
+        $rendered = app(AssetStore::class)->put('video', 'mp4', 'video/mp4', true);
+        $this->mock(VoiceAgent::class, fn ($m) => $m->shouldReceive('generate')->once()->andReturn($voice));
+        $this->mock(VideoComposerAgent::class, fn ($m) => $m->shouldReceive('render')->once()->andReturnUsing(function (&$actual, $artifacts) use ($rendered) {
+            $this->assertSame('video/mp4', $artifacts['scenes']['intro']['mime_type']);
+            $this->assertSame('image/png', $artifacts['scenes']['demo']['mime_type']);
+            return $rendered;
+        }));
+        (new GenerateContentJob($id, app(ContentSchema::class)->validate($snapshot), $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
+        $scenes = Content::findOrFail($id)->currentVersion->snapshot['scenes'];
+        $this->assertSame($video->id, $scenes[0]['media_id']);
+        $this->assertSame('manual', $scenes[0]['media_mode']);
+        $this->assertSame('media', $scenes[0]['background_type']);
+        $this->assertSame($image->id, $scenes[1]['media_id']);
+        $this->assertSame(94, $scenes[0]['headline_font_size']);
+        $this->assertSame(51, $scenes[0]['body_font_size']);
+        $this->assertSame('#f4ce52', $scenes[0]['headline_color']);
+        $this->assertSame('#16805c', $scenes[0]['cta_border_color']);
+    }
+
+    public function test_custom_scene_type_and_cta_colors_render_as_ass_overrides(): void
+    {
+        $composer = app(VideoComposerAgent::class);
+        $scene = ['headline' => 'Cross the bridge', 'body' => 'See the hills', 'headline_font_size' => 94, 'body_font_size' => 51];
+        $sizes = $composer->typographyForScene($scene);
+        $this->assertSame(94, $sizes['headline_size']);
+        $this->assertSame(51, $sizes['body_size']);
+        $snapshot = app(ContentSchema::class)->validate($this->snapshot());
+        $snapshot['scenes'][1] += ['purpose' => 'closing', 'body' => 'Watch the hills', 'headline_color' => '#f4ce52', 'body_color' => '#64c8e8', 'cta_text_color' => '#ffffff', 'cta_background_color' => '#101820', 'cta_border_color' => '#16805c', 'template' => 'cta_button'];
+        $ass = (new \ReflectionMethod(VideoComposerAgent::class, 'subtitles'))->invoke($composer, $snapshot, false, []);
+        $this->assertStringContainsString('\\1c&H0052CEF4&', $ass);
+        $this->assertStringContainsString('\\1c&H00E8C864&', $ass);
+        $this->assertStringContainsString('\\3c&H005C8016&', $ass);
+        $this->assertStringContainsString('\\1a&HC0&', $ass);
+    }
+
+    public function test_real_initial_manual_video_and_style_script_revision_preserve_background(): void
+    {
+        $tmp = sys_get_temp_dir().'/agent-initial-style-'.bin2hex(random_bytes(8));
+        mkdir($tmp);
+        try {
+            $source = getenv('AFFILIATE_AGENT_NATURE_SOURCE');
+            if (!$source || !is_file($source)) {
+                (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'testsrc2=size=540x960:rate=15', '-t', '5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', $tmp.'/nature.mp4']))->mustRun();
+                $source = $tmp.'/nature.mp4';
+            }
+            foreach (['Cross the bridge. See the green hills. Explore more in the description.', 'Cross the bridge. See the high hills. Explore more in the description.'] as $i => $spoken) {
+                (new Process([config('affiliate_agent.ffmpeg'), '-y', '-f', 'lavfi', '-i', 'flite=text='.$spoken.':voice=slt', '-af', 'apad', '-t', '15', $tmp.'/voice-'.$i.'.wav']))->mustRun();
+            }
+            $media = $this->post($this->root.'/media', ['name' => 'Nature bridge and hills real footage', 'file' => new UploadedFile($source, 'nature-bridge.mp4', 'video/mp4', null, true)], ['Accept' => 'application/json'])->assertCreated()->json('data');
+            $snapshot = $this->snapshot();
+            $snapshot['scenes'] = [
+                ['id' => 'hook', 'purpose' => 'hook', 'text' => 'Cross the bridge.', 'headline' => 'Cross the bridge', 'body' => 'Nature opens the journey', 'duration' => 5, 'media_id' => $media['id'], 'media_mode' => 'manual', 'media_locked' => true, 'media_type' => 'video', 'media_fit' => 'cover', 'media_focus' => 'center', 'background_type' => 'media', 'headline_font_size' => 94, 'body_font_size' => 50, 'headline_color' => '#f4ce52', 'body_color' => '#ffffff', 'template' => 'none', 'animation' => 'typewriter'],
+                ['id' => 'content', 'purpose' => 'benefit', 'text' => 'See the green hills.', 'headline' => 'See the hills', 'body' => 'One clear view', 'duration' => 5, 'media_id' => null, 'background_type' => 'animated_abstract', 'template' => 'none', 'animation' => 'slide_up'],
+                ['id' => 'closing', 'purpose' => 'closing', 'text' => 'Explore more in the description.', 'headline' => 'Explore more', 'body' => 'Take the next step', 'duration' => 5, 'media_id' => null, 'background_type' => 'animated_abstract', 'template' => 'cta_button', 'animation' => 'fade_up'],
+            ];
+            $snapshot['script'] = VoiceAgent::narration($snapshot);
+            $snapshot['captions'] = $snapshot['script'];
+            $firstVoice = app(AssetStore::class)->put(file_get_contents($tmp.'/voice-0.wav'), 'wav', 'audio/wav');
+            $secondVoice = app(AssetStore::class)->put(file_get_contents($tmp.'/voice-1.wav'), 'wav', 'audio/wav');
+            $this->mock(VoiceAgent::class, fn ($m) => $m->shouldReceive('generate')->twice()->andReturn($firstVoice, $secondVoice));
+            $id = $this->postJson($this->root.'/contents', ['title' => 'Nature bridge demonstration', 'snapshot' => $snapshot])->assertCreated()->json('data.id');
+            (new GenerateContentJob($id, $snapshot, $this->admin->id))->handle(app(RevisionAgent::class), app(ReviewService::class));
+            $initial = Content::findOrFail($id)->currentVersion;
+            $this->assertTrue($initial->qa['passed']);
+            $this->assertSame($media['id'], $initial->snapshot['scenes'][0]['media_id']);
+            $this->assertSame('video/mp4', $initial->artifacts['scenes']['hook']['mime_type']);
+            $this->assertSame(94, $initial->snapshot['scenes'][0]['headline_font_size']);
+            $this->assertSame($snapshot['script'], $initial->snapshot['script']);
+            $scenes = $initial->snapshot['scenes'];
+            $scenes[0]['headline_font_size'] = 88;
+            $scenes[1]['text'] = 'See the high hills.';
+            $scenes[2]['cta_text_color'] = '#ffffff';
+            $scenes[2]['cta_border_color'] = '#f4ce52';
+            $feedback = $this->postJson($this->root.'/contents/'.$id.'/revisions', ['expected_version_id' => $initial->id, 'feedback' => 'Adjust headline size, CTA colors and narration only.', 'target' => 'scenes', 'patch' => ['scenes' => $scenes]])->assertAccepted()->json('data.id');
+            $this->execute($feedback);
+            $revised = Content::findOrFail($id)->currentVersion;
+            $this->assertTrue($revised->qa['passed']);
+            $this->assertSame($media['id'], $revised->snapshot['scenes'][0]['media_id']);
+            $this->assertSame($initial->artifacts['scenes']['hook'], $revised->artifacts['scenes']['hook']);
+            $this->assertSame(88, $revised->snapshot['scenes'][0]['headline_font_size']);
+            $this->assertSame('#f4ce52', $revised->snapshot['scenes'][2]['cta_border_color']);
+            $this->assertSame('Cross the bridge. See the high hills. Explore more in the description.', $revised->snapshot['script']);
+            $this->assertSame($revised->snapshot['script'], $revised->snapshot['captions']);
+            $this->assertSame(['voice', 'render', 'qa'], $revised->steps);
+            if ($output = getenv('AFFILIATE_AGENT_INITIAL_PREVIEW_OUTPUT')) {
+                copy(app(AssetStore::class)->absolute($initial->artifacts['video']), $output);
+                copy(app(AssetStore::class)->absolute($revised->artifacts['video']), preg_replace('/\.mp4$/', '-revised.mp4', $output));
+                file_put_contents(preg_replace('/\.mp4$/', '-scenes.json', $output), json_encode(['initial' => $initial->snapshot['scenes'], 'revised' => $revised->snapshot['scenes'], 'source' => $source], JSON_PRETTY_PRINT));
+            }
+        } finally {
+            foreach (glob($tmp.'/*') ?: [] as $path) @unlink($path);
+            @rmdir($tmp);
+        }
+    }
 }

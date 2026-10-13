@@ -1,4 +1,5 @@
 "use client";
+import { fileUploadClass } from "@/lib/file-upload-style";
 import { useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { PageSizeSelect, type PageSize } from "@/components/admin/page-size";
@@ -61,7 +62,7 @@ export default function Page() {
     <div>
       <h1 className="text-3xl font-bold">Media library</h1>
       <form onSubmit={upload} className="mt-6 flex flex-wrap gap-3">
-        <input type="file" name="image" accept="image/*" required />
+        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" className={fileUploadClass} required /><span className="self-center text-xs text-muted-foreground">Images: max 5 MB.</span>
         <button className="cursor-pointer rounded-lg bg-primary px-5 py-2 text-primary-foreground hover:opacity-90 focus-visible:outline-2 focus-visible:outline-ring">
           Upload image
         </button>
