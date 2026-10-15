@@ -19,7 +19,12 @@ export async function publicGet<T>(path: string, query?: Record<string, string |
   const base = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1").replace(/\/$/, "");
   const url = new URL(`${base}/public/${path.replace(/^\//, "")}`);
   Object.entries(query || {}).forEach(([key, value]) => { if (value !== undefined && value !== "") url.searchParams.set(key, String(value)); });
-  const response = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+  const response = await fetch(url, {
+  next: { revalidate: 60 },
+  headers: {
+    Accept: "application/json",
+  },
+});
   if (!response.ok) throw new PublicApiError(response.status);
   return (await response.json()) as T;
 }
