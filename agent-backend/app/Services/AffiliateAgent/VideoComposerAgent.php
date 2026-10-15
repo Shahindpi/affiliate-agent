@@ -159,9 +159,9 @@ class VideoComposerAgent
     private function subtitles(array $snapshot, bool $mock, array $darkInk = []): string
     {
         $text = "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n";
-        $text .= "Style: Captions,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,3,1,2,70,70,450,1\n";
+        $text .= "Style: Captions,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,4,1,2,110,110,440,1\n";
         $text .= "Style: Headline,DejaVu Sans,86,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,4,2,8,95,95,290,1\n";
-        $text .= "Style: Body,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,0,0,0,0,100,100,0,0,1,3,1,8,95,95,550,1\n";
+        $text .= "Style: Body,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00102030,&H70102030,1,0,0,0,100,100,0,0,1,3,1,8,95,95,550,1\n";
         $text .= "Style: CTA,DejaVu Sans,50,&H00FFFFFF,&H00FFFFFF,&H00102030,&H00163348,1,0,0,0,100,100,0,0,1,3,1,2,190,190,320,1\n";
         $text .= "Style: Badge,DejaVu Sans,38,&H00FFFFFF,&H00FFFFFF,&H00335C64,&H00163348,1,0,0,0,100,100,0,0,3,3,1,8,190,190,155,1\n";
         $text .= "Style: Disclosure,DejaVu Sans,27,&H00FFFFFF,&H00FFFFFF,&H00102030,&H80102030,0,0,0,0,100,100,0,0,1,2,1,2,90,90,95,1\n";
@@ -189,21 +189,45 @@ class VideoComposerAgent
                 $text .= $line($start, $stop, 'Captions', implode(' ', $chunk), $captionInk);
             }
             $cursor += $count; $remaining -= $count; $totalWeight -= $spokenWeights[$index];
-            $layout = $scene['layout'] ?? 'center';
-            $demo = ($scene['purpose'] ?? '') === 'demo';
-            $x = $layout === 'center' ? 540 : 95;
-            $align = $layout === 'center' ? 8 : 7;
-            $y = $demo ? 850 : ($layout === 'split' ? 450 : 360 + ($index % 2) * 90);
+            // Treat headline, body and CTA as one centered composition. ASS alignment 5
+            // anchors a multiline string at its actual center, not its top edge.
             $animation = $scene['animation'] ?? 'fade_up';
-            $ink = ($darkInk[$scene['id']] ?? (($scene['background_type'] ?? '') === 'solid_light')) ? '\\c&H002A2521&\\3c&H00F4F3EC&' : '';
+            $ink = ($darkInk[$scene['id']] ?? (($scene['background_type'] ?? '') === 'solid_light')) ? '\\1c&H002A2521&\\3c&H00F4F3EC&' : '';
             $headlineInk = isset($scene['headline_color']) ? '\\1c'.$this->assColor($scene['headline_color']).'\\3c'.$this->assOutline($scene['headline_color']) : $ink;
             $bodyInk = isset($scene['body_color']) ? '\\1c'.$this->assColor($scene['body_color']).'\\3c'.$this->assOutline($scene['body_color']) : $ink;
             $type = $this->typographyForScene($scene);
             ['headline' => $headline, 'headline_size' => $headlineSize, 'headline_line_width' => $lineWidth,
                 'wrapped_headline' => $wrapped, 'body' => $body, 'body_size' => $bodySize] = $type;
+            $template = $scene['template'] ?? ($index === $lastIndex ? 'cta_button' : 'none');
+            $label = app(SceneDesignAgent::class)->templateText($template, $snapshot['cta']);
+            $badge = in_array($template, ['product_title', 'feature_highlight', 'bullet_point', 'lower_third', 'tag_badge', 'powered_by_dewdora'], true);
+            $visibleLabel = $label !== '' ? mb_strimwidth($label, 0, $badge ? 54 : 32, '…') : '';
+            $fontWeight = ['regular' => 400, 'medium' => 500, 'semibold' => 600, 'bold' => 700, 'extra_bold' => 800][$scene['text_font_weight'] ?? 'bold'] ?? 1;
+            $stroke = ['none' => 0, 'thin' => 1.5, 'medium' => 3, 'thick' => 5][$scene['text_stroke'] ?? 'medium'] ?? 3;
+            $shadow = ['none' => 0, 'soft' => 1, 'medium' => 2, 'strong' => 4][$scene['text_shadow'] ?? 'soft'] ?? 1;
+            $outline = isset($scene['text_stroke_color']) ? '\\3c'.$this->assColor($scene['text_stroke_color']) : '';
+            $style = "\\b$fontWeight\\bord$stroke\\shad$shadow$outline";
+            $body = $type['body'];
+            $headlineLines = substr_count($wrapped, "\n") + 1;
+            $bodyLines = $body !== '' ? substr_count($body, "\n") + 1 : 0;
+            $headlineHeight = $headlineLines * $headlineSize * 1.24;
+            $bodyHeight = $bodyLines ? $bodyLines * $bodySize * 1.25 : 0;
+            $ctaHeight = $visibleLabel !== '' ? 112 : 0;
+            $gap = 34;
+            $wholeHeight = $headlineHeight + ($bodyHeight ? $bodyHeight + $gap : 0) + ($ctaHeight ? $ctaHeight + $gap : 0);
+            // Keep the entire group between y=490 and y=1430 on a 1080x1920 frame.
+            $scale = min(1, 900 / max(1, $wholeHeight));
+            $headlineSize = max(36, (int) floor($headlineSize * $scale));
+            $bodySize = max(26, (int) floor($bodySize * $scale));
+            $headlineHeight *= $scale; $bodyHeight *= $scale; $ctaHeight *= $scale; $gap *= $scale;
+            $wholeHeight = $headlineHeight + ($bodyHeight ? $bodyHeight + $gap : 0) + ($ctaHeight ? $ctaHeight + $gap : 0);
+            $top = 960 - $wholeHeight / 2;
+            $headlineY = (int) round($top + $headlineHeight / 2);
+            $bodyY = (int) round($top + $headlineHeight + $gap + $bodyHeight / 2);
+            $ctaY = (int) round($top + $wholeHeight - $ctaHeight / 2);
             $headlineStart = $offset + min(.2, $scene['duration'] * .06);
             $headlineEnd = $offset + $scene['duration'] * .69;
-            $headlineEffect = "\\an$align\\fs$headlineSize".$this->entrance($animation, $x, $y)."\\fad(240,180)$headlineInk";
+            $headlineEffect = "\\an5\\fs$headlineSize".$this->entrance($animation, 540, $headlineY)."\\fad(240,180)$headlineInk$style";
             if (in_array($animation, ['typewriter', 'cursor_reveal', 'word_stagger'], true) && mb_strlen($headline) <= 75) {
                 $pieces = $animation === 'word_stagger' ? preg_split('/\s+/u', $headline) : preg_split('//u', $headline, -1, PREG_SPLIT_NO_EMPTY);
                 $steps = min($animation === 'word_stagger' ? 8 : 16, count($pieces));
@@ -212,32 +236,26 @@ class VideoComposerAgent
                     $visible = (int) ceil(count($pieces) * $j / $steps);
                     $fragment = $animation === 'word_stagger' ? implode(' ', array_slice($pieces, 0, $visible)) : implode('', array_slice($pieces, 0, $visible));
                     $cursorGlyph = $animation === 'cursor_reveal' && $j < $steps && $j % 2 === 0 ? '_' : '';
-                    $text .= $line($headlineStart + ($j - 1) * $reveal / $steps, $j === $steps ? $headlineEnd : $headlineStart + $j * $reveal / $steps, 'Headline', $this->wrapOverlay($fragment.$cursorGlyph, $lineWidth, 3), "{\\an$align\\pos($x,$y)\\fs$headlineSize$headlineInk}");
+                    $text .= $line($headlineStart + ($j - 1) * $reveal / $steps, $j === $steps ? $headlineEnd : $headlineStart + $j * $reveal / $steps, 'Headline', $this->wrapOverlay($fragment.$cursorGlyph, $lineWidth, 3), "{\\an5\\pos(540,$headlineY)\\fs$headlineSize$headlineInk$style}");
                 }
             } else $text .= $line($headlineStart, $headlineEnd, 'Headline', $wrapped, '{'.$headlineEffect.'}');
             if ($body !== '') {
-                $bodyY = $demo ? 1170 : $y + 260;
-                $text .= $line($offset + $scene['duration'] * .3, $offset + $scene['duration'] * .88, 'Body', $body, "{\\an$align\\pos($x,$bodyY)\\fs$bodySize\\fad(380,180)$bodyInk}");
+                $text .= $line($offset + $scene['duration'] * .3, $offset + $scene['duration'] * .88, 'Body', $body, "{\\an5\\pos(540,$bodyY)\\fs$bodySize\\fad(380,180)$bodyInk$style}");
             }
-            $template = $scene['template'] ?? ($index === $lastIndex ? 'cta_button' : 'none');
-            $label = app(SceneDesignAgent::class)->templateText($template, $snapshot['cta']);
-            if ($label !== '') {
-                $badge = in_array($template, ['product_title', 'feature_highlight', 'bullet_point', 'lower_third', 'tag_badge', 'powered_by_dewdora'], true);
-                $ctaY = $badge ? ($demo ? 1590 : 1150) : 1590;
-                $size = $badge ? 36 : (mb_strlen($label) > 28 ? 42 : 54);
-                $visibleLabel = mb_strimwidth($label, 0, $badge ? 54 : 32, '…');
+            if ($visibleLabel !== '') {
+                $size = (int) round(($badge ? 36 : (mb_strlen($visibleLabel) > 28 ? 42 : 54)) * $scale);
                 $ctaStart = $offset + $scene['duration'] * ($badge ? .58 : .72);
                 if (!$badge) {
-                    $border = $this->assColor($scene['cta_border_color'] ?? '#16805c'); // Current Dewdora primary token.
+                    $border = $this->assColor($scene['cta_border_color'] ?? '#16805c');
                     $fill = $this->assColor($scene['cta_background_color'] ?? '#101820');
-                    $width = min(920, max(300, (int) (mb_strlen($visibleLabel) * $size * .6 + 90)));
-                    $left = intdiv(1080 - $width, 2); $top = $ctaY - 84;
-                    $right = $width - 18; $bottom = 104;
-                    $path = "m 18 0 l $right 0 b ".($width - 7)." 0 $width 7 $width 18 l $width 86 b $width 97 ".($width - 7)." $bottom $right $bottom l 18 $bottom b 7 $bottom 0 97 0 86 l 0 18 b 0 7 7 0 18 0";
-                    $text .= $line($ctaStart, $end, 'CTA', $path, "{\\an7\\pos($left,$top)\\p1\\1c$fill\\1a&HC0&\\3c$border\\3a&H00&\\bord4\\shad0\\fad(350,180)}");
+                    $width = min(860, max(300, (int) (mb_strlen($visibleLabel) * $size * .6 + 90)));
+                    $left = intdiv(1080 - $width, 2); $buttonTop = (int) round($ctaY - $ctaHeight / 2);
+                    $right = $width - 18; $bottom = (int) $ctaHeight;
+                    $path = "m 18 0 l $right 0 l $width 18 l $width ".($bottom - 18)." l $right $bottom l 18 $bottom l 0 ".($bottom - 18)." l 0 18";
+                    $text .= $line($ctaStart, $end, 'CTA', $path, "{\\an7\\pos($left,$buttonTop)\\p1\\1c$fill\\1a&HC0&\\3c$border\\3a&H00&\\bord4\\shad0\\fad(350,180)}");
                 }
                 $ctaInk = $badge ? '' : '\\1c'.$this->assColor($scene['cta_text_color'] ?? '#ffffff').'\\3c'.$this->assOutline($scene['cta_text_color'] ?? '#ffffff');
-                $text .= $line($ctaStart, $end, $badge ? 'Badge' : 'CTA', $visibleLabel, "{\\an2\\pos(540,$ctaY)\\fs$size\\fad(350,180)\\fscx92\\fscy92\\t(0,400,\\fscx100\\fscy100)$ctaInk}");
+                $text .= $line($ctaStart, $end, $badge ? 'Badge' : 'CTA', $visibleLabel, "{\\an5\\pos(540,$ctaY)\\fs$size\\fad(350,180)$ctaInk$style}");
             }
             $offset = $end;
         }
